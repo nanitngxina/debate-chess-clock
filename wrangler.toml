@@ -1,4 +1,4 @@
-name = "debate-cage-clock"
+﻿name = "debate-cage-clock"
 main = "worker-index.ts"
 compatibility_date = "2026-03-18"
 compatibility_flags = ["enable_request_signal"]
@@ -13,9 +13,8 @@ class_name = "RoomDurableObject"
 
 [[kv_namespaces]]
 binding = "ROOM_DIRECTORY"
-id = "YOUR_KV_NAMESPACE_ID"
-preview_id = "YOUR_KV_PREVIEW_NAMESPACE_ID"
 
 [[migrations]]
 tag = "v1"
 new_classes = ["RoomDurableObject"]
+

@@ -36,7 +36,12 @@ const worker: ExportedHandler<WorkerEnv> = {
       return proxyRoomRequest(request, env);
     }
 
-    return env.ASSETS.fetch(request);
+    const assetResponse = await env.ASSETS.fetch(request);
+    if (assetResponse.status !== 404 || !shouldServeAppShell(request, url)) {
+      return assetResponse;
+    }
+
+    return env.ASSETS.fetch(new Request(new URL("/", request.url).toString(), request));
   },
 };
 
@@ -195,4 +200,20 @@ function json(body: unknown, status = 200): Response {
       "Content-Type": "application/json; charset=utf-8",
     },
   });
+}
+
+function shouldServeAppShell(request: Request, url: URL): boolean {
+  if (request.method !== "GET") {
+    return false;
+  }
+
+  if (url.pathname.startsWith("/api/")) {
+    return false;
+  }
+
+  if (/\.[a-zA-Z0-9]+$/.test(url.pathname)) {
+    return false;
+  }
+
+  return true;
 }

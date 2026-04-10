@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG, MAX_BARRAGE_ITEMS, MAX_ROUND_HISTORY } from "./defaults";
+﻿import { DEFAULT_CONFIG, MAX_BARRAGE_ITEMS, MAX_ROUND_HISTORY } from "./defaults";
 import {
   BarrageMessage,
   BarrageRequest,
@@ -70,7 +70,8 @@ export function sanitizeConfig(config: RoomConfig): RoomConfig {
   for (const rule of sortedRules) {
     const normalizedEnd =
       rule.endRound === null ? null : Math.max(rule.startRound, rule.endRound);
-    const previous = validatedRules.at(-1);
+    const previous =
+      validatedRules.length > 0 ? validatedRules[validatedRules.length - 1] : undefined;
     if (previous) {
       const previousEnd = previous.endRound ?? Number.POSITIVE_INFINITY;
       if (rule.startRound <= previousEnd) {
@@ -469,3 +470,4 @@ function clampInteger(value: number, min: number, max: number): number {
 
   return Math.min(max, Math.max(min, Math.round(value)));
 }
+

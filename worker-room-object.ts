@@ -1,4 +1,4 @@
-import { getRolePermissions } from "./src/shared/defaults";
+﻿import { getRolePermissions } from "./src/shared/defaults";
 import {
   appendBarrage,
   applyCommand,
@@ -20,7 +20,7 @@ interface LiveSession {
   heartbeatId: ReturnType<typeof setInterval>;
 }
 
-export class RoomDurableObject extends DurableObject {
+export class RoomDurableObject {
   private readonly state: DurableObjectState;
   private readonly env: WorkerEnv;
   private readonly encoder = new TextEncoder();
@@ -28,7 +28,6 @@ export class RoomDurableObject extends DurableObject {
   private room: RoomState | null = null;
 
   constructor(state: DurableObjectState, env: WorkerEnv) {
-    super(state, env);
     this.state = state;
     this.env = env;
     void this.state.blockConcurrencyWhile(async () => {
@@ -130,7 +129,7 @@ export class RoomDurableObject extends DurableObject {
     const room = applyCommand(currentRoom, payload.command, now);
     this.room = room;
     await this.persistRoom(origin);
-    await this.broadcastSnapshot(origin);
+    this.state.waitUntil(this.broadcastSnapshot(origin));
 
     return json(this.createAccessPayload(room, payload.role, origin, now));
   }
@@ -146,7 +145,7 @@ export class RoomDurableObject extends DurableObject {
     const room = appendBarrage(currentRoom, payload, now);
     this.room = room;
     await this.persistRoom(origin);
-    await this.broadcastSnapshot(origin);
+    this.state.waitUntil(this.broadcastSnapshot(origin));
 
     return json(this.createAccessPayload(room, payload.role, origin, now));
   }
@@ -174,7 +173,7 @@ export class RoomDurableObject extends DurableObject {
     });
 
     await this.writeSnapshot(writer, syncedRoom, url.origin, Date.now());
-    await this.broadcastSnapshot(url.origin);
+    this.state.waitUntil(this.broadcastSnapshot(url.origin));
 
     return new Response(stream.readable, {
       headers: {
@@ -282,7 +281,7 @@ export class RoomDurableObject extends DurableObject {
     } catch {
       return;
     } finally {
-      await this.broadcastSnapshot(origin);
+      this.state.waitUntil(this.broadcastSnapshot(origin));
     }
   }
 }
@@ -305,3 +304,5 @@ function json(body: unknown, status = 200): Response {
     },
   });
 }
+
+
