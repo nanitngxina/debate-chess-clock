@@ -7,7 +7,7 @@ export function MarketingPage({ onOpenDashboard }: MarketingPageProps) {
     <main className="landing">
       <section className="hero">
         <span className="hero__eyebrow">赛博八角笼 Online</span>
-        <h1>把主持人电脑上的本地棋钟，升级成可在线围观和协作的辩论房间。</h1>
+        <h1>八角笼辩论棋钟，现已升级为可多人同步的在线房间。</h1>
         <p>
           这一版支持多房间、多人同步观看、主持人后台开房、正反方专属权限链接，以及观众弹幕。
           房间状态由服务端统一维护，手机和桌面都能实时看到同一场辩论。
