@@ -18,6 +18,7 @@ const STORAGE_KEY = "room-state";
 interface LiveSession {
   writer: WritableStreamDefaultWriter<Uint8Array>;
   heartbeatId: ReturnType<typeof setInterval>;
+  clientId: string;
 }
 
 export class RoomDurableObject {
@@ -154,6 +155,7 @@ export class RoomDurableObject {
     const url = new URL(request.url);
     const role = url.searchParams.get("role");
     const token = url.searchParams.get("token") ?? "";
+    const clientId = url.searchParams.get("clientId")?.trim() || crypto.randomUUID();
 
     if (!isRole(role) || !validateToken(currentRoom, role, token)) {
       return json({ error: "房间权限无效" }, 403);
@@ -167,7 +169,7 @@ export class RoomDurableObject {
       void writer.write(this.encoder.encode(": ping\n\n"));
     }, 15000);
 
-    this.sessions.set(sessionId, { writer, heartbeatId });
+    this.sessions.set(sessionId, { writer, heartbeatId, clientId });
     request.signal?.addEventListener("abort", () => {
       void this.closeSession(sessionId, url.origin);
     });
@@ -205,7 +207,7 @@ export class RoomDurableObject {
       permissions: getRolePermissions(role),
       links: role === "host" ? buildRoomLinks(origin, room.roomId, room.tokens) : undefined,
       serverNow: now,
-      onlineCount: this.sessions.size,
+      onlineCount: this.getOnlineCount(),
     };
   }
 
@@ -244,7 +246,7 @@ export class RoomDurableObject {
     await Promise.all(
       [...this.sessions.entries()].map(async ([sessionId, session]) => {
         try {
-          await this.writeSnapshot(session.writer, room, origin, now);
+          await this.writeSnapshot(session.writer, room, now);
         } catch {
           closedSessions.push(sessionId);
         }
@@ -257,15 +259,18 @@ export class RoomDurableObject {
   private async writeSnapshot(
     writer: WritableStreamDefaultWriter<Uint8Array>,
     room: RoomState,
-    origin: string,
     now: number,
   ): Promise<void> {
     const payload = JSON.stringify({
       room: toPublicRoomState(room),
       serverNow: now,
-      onlineCount: this.sessions.size,
+      onlineCount: this.getOnlineCount(),
     });
     await writer.write(this.encoder.encode(`data: ${payload}\n\n`));
+  }
+
+  private getOnlineCount(): number {
+    return new Set([...this.sessions.values()].map((session) => session.clientId)).size;
   }
 
   private async closeSession(sessionId: string, origin: string): Promise<void> {
@@ -304,5 +309,3 @@ function json(body: unknown, status = 200): Response {
     },
   });
 }
-
-

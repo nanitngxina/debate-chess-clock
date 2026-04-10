@@ -1,4 +1,4 @@
-import {
+﻿import {
   AdminLoginResponse,
   BarrageRequest,
   CommandRequest,
@@ -41,8 +41,8 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function buildEventsUrl(roomId: string, role: string, token: string): string {
-  const query = new URLSearchParams({ role, token });
+export function buildEventsUrl(roomId: string, role: string, token: string, clientId: string): string {
+  const query = new URLSearchParams({ role, token, clientId });
   return buildUrl(`/api/rooms/${encodeURIComponent(roomId)}/events?${query.toString()}`);
 }
 
