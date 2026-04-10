@@ -18,6 +18,20 @@ function getOrCreateRealtimeClientId(): string {
   }
 }
 
+function shouldReusePayload(
+  previousPayload: RoomAccessPayload | null,
+  nextPayload: RoomAccessPayload,
+): boolean {
+  if (!previousPayload) {
+    return false;
+  }
+
+  return (
+    previousPayload.onlineCount === nextPayload.onlineCount &&
+    JSON.stringify(previousPayload.room) === JSON.stringify(nextPayload.room)
+  );
+}
+
 export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
   const [payload, setPayload] = useState<RoomAccessPayload | null>(null);
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
@@ -26,23 +40,33 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
   const [clientId] = useState(() => getOrCreateRealtimeClientId());
 
   const applyPayload = useCallback((nextPayload: RoomAccessPayload) => {
-    setPayload(nextPayload);
-    setServerOffset(nextPayload.serverNow - Date.now());
+    setPayload((previousPayload) =>
+      shouldReusePayload(previousPayload, nextPayload) ? previousPayload : nextPayload,
+    );
+
+    if (nextPayload.room.clock.isRunning) {
+      setServerOffset(nextPayload.serverNow - Date.now());
+    }
   }, []);
+
+  const syncSnapshot = useCallback(async () => {
+    const nextPayload = await fetchRoomAccess(roomId, role, token);
+    applyPayload(nextPayload);
+    setConnection("live");
+    setError(null);
+  }, [applyPayload, role, roomId, token]);
 
   const refresh = useCallback(async () => {
     setConnection("connecting");
     setError(null);
 
     try {
-      const nextPayload = await fetchRoomAccess(roomId, role, token);
-      applyPayload(nextPayload);
-      setConnection("live");
+      await syncSnapshot();
     } catch (refreshError) {
       setConnection("offline");
       setError(refreshError instanceof Error ? refreshError.message : "房间连接失败");
     }
-  }, [applyPayload, role, roomId, token]);
+  }, [syncSnapshot]);
 
   useEffect(() => {
     void refresh();
@@ -63,14 +87,21 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
             return null;
           }
 
-          return {
+          const nextPayload: RoomAccessPayload = {
             ...previousPayload,
             room: snapshot.room,
             serverNow: snapshot.serverNow,
             onlineCount: snapshot.onlineCount,
           };
+
+          return shouldReusePayload(previousPayload, nextPayload)
+            ? previousPayload
+            : nextPayload;
         });
-        setServerOffset(snapshot.serverNow - Date.now());
+
+        if (snapshot.room.clock.isRunning) {
+          setServerOffset(snapshot.serverNow - Date.now());
+        }
       } catch {
         setConnection("offline");
       }
@@ -84,6 +115,18 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
       source.close();
     };
   }, [clientId, role, roomId, token]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      void syncSnapshot().catch(() => {
+        setConnection("offline");
+      });
+    }, 1500);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [syncSnapshot]);
 
   return {
     payload,

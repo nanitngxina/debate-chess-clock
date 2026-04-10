@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+﻿import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { describeRole, formatDateTime } from "../lib/format";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { BarrageMessage, RoomRole } from "../shared/types";
@@ -21,6 +21,7 @@ export function BarragePanel({
   const [nickname, setNickname] = usePersistentState("debate-barrage-nickname", "");
   const [content, setContent] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   useEffect(() => {
     const element = listRef.current;
@@ -41,6 +42,17 @@ export function BarragePanel({
 
     await onSend(nickname.trim() || "路人", nextContent);
     setContent("");
+  };
+
+  const handleTextareaKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+    if (!disabled && !sending) {
+      formRef.current?.requestSubmit();
+    }
   };
 
   return (
@@ -68,7 +80,7 @@ export function BarragePanel({
         {items.length === 0 && <p className="empty-state">还没有弹幕，先来一句热场吧。</p>}
       </div>
 
-      <form className="barrage-form" onSubmit={handleSubmit}>
+      <form className="barrage-form" onSubmit={handleSubmit} ref={formRef}>
         <input
           type="text"
           maxLength={20}
@@ -83,6 +95,7 @@ export function BarragePanel({
           disabled={disabled}
           placeholder="发一条弹幕，房间内所有人会实时看到"
           onChange={(event) => setContent(event.target.value)}
+          onKeyDown={handleTextareaKeyDown}
         />
         <button type="submit" className="button" disabled={disabled || sending}>
           {sending ? "发送中..." : "发送弹幕"}

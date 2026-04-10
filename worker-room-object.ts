@@ -130,7 +130,7 @@ export class RoomDurableObject {
     const room = applyCommand(currentRoom, payload.command, now);
     this.room = room;
     await this.persistRoom(origin);
-    this.state.waitUntil(this.broadcastSnapshot(origin));
+    void this.broadcastSnapshot(origin);
 
     return json(this.createAccessPayload(room, payload.role, origin, now));
   }
@@ -146,7 +146,7 @@ export class RoomDurableObject {
     const room = appendBarrage(currentRoom, payload, now);
     this.room = room;
     await this.persistRoom(origin);
-    this.state.waitUntil(this.broadcastSnapshot(origin));
+    void this.broadcastSnapshot(origin);
 
     return json(this.createAccessPayload(room, payload.role, origin, now));
   }
@@ -175,7 +175,7 @@ export class RoomDurableObject {
     });
 
     await this.writeSnapshot(writer, syncedRoom, url.origin, Date.now());
-    this.state.waitUntil(this.broadcastSnapshot(url.origin));
+    void this.broadcastSnapshot(url.origin);
 
     return new Response(stream.readable, {
       headers: {
@@ -286,7 +286,7 @@ export class RoomDurableObject {
     } catch {
       return;
     } finally {
-      this.state.waitUntil(this.broadcastSnapshot(origin));
+      void this.broadcastSnapshot(origin);
     }
   }
 }
