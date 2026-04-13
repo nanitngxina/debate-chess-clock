@@ -1,10 +1,11 @@
-﻿import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { buildEventsUrl, fetchRoomAccess } from "../lib/api";
-import { RoomAccessPayload, RoomRole, RoomSnapshotPayload } from "../shared/types";
+import { getRolePermissions } from "../shared/defaults";
+import { RoomAccessPayload, RoomRole, RoomSnapshotPayload, VoiceSignalEnvelope } from "../shared/types";
 
-function getOrCreateRealtimeClientId(): string {
+function getOrCreatePresenceId(): string {
   try {
-    const storageKey = "debate-room-realtime-client-id";
+    const storageKey = "debate-room-presence-id";
     const existing = window.localStorage.getItem(storageKey);
     if (existing) {
       return existing;
@@ -18,10 +19,23 @@ function getOrCreateRealtimeClientId(): string {
   }
 }
 
-function shouldReusePayload(
-  previousPayload: RoomAccessPayload | null,
-  nextPayload: RoomAccessPayload,
-): boolean {
+function getOrCreateClientId(): string {
+  try {
+    const storageKey = "debate-room-voice-client-id";
+    const existing = window.sessionStorage.getItem(storageKey);
+    if (existing) {
+      return existing;
+    }
+
+    const nextId = crypto.randomUUID();
+    window.sessionStorage.setItem(storageKey, nextId);
+    return nextId;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+
+function shouldReusePayload(previousPayload: RoomAccessPayload | null, nextPayload: RoomAccessPayload): boolean {
   if (!previousPayload) {
     return false;
   }
@@ -37,12 +51,12 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
   const [error, setError] = useState<string | null>(null);
   const [serverOffset, setServerOffset] = useState(0);
-  const [clientId] = useState(() => getOrCreateRealtimeClientId());
+  const [presenceId] = useState(() => getOrCreatePresenceId());
+  const [clientId] = useState(() => getOrCreateClientId());
+  const [lastVoiceSignal, setLastVoiceSignal] = useState<VoiceSignalEnvelope | null>(null);
 
   const applyPayload = useCallback((nextPayload: RoomAccessPayload) => {
-    setPayload((previousPayload) =>
-      shouldReusePayload(previousPayload, nextPayload) ? previousPayload : nextPayload,
-    );
+    setPayload((previousPayload) => (shouldReusePayload(previousPayload, nextPayload) ? previousPayload : nextPayload));
 
     if (nextPayload.room.clock.isRunning) {
       setServerOffset(nextPayload.serverNow - Date.now());
@@ -73,7 +87,7 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
   }, [refresh]);
 
   useEffect(() => {
-    const source = new EventSource(buildEventsUrl(roomId, role, token, clientId));
+    const source = new EventSource(buildEventsUrl(roomId, role, token, presenceId, clientId));
 
     source.onopen = () => {
       setConnection("live");
@@ -83,20 +97,23 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
       try {
         const snapshot = JSON.parse(event.data) as RoomSnapshotPayload;
         setPayload((previousPayload) => {
-          if (!previousPayload) {
-            return null;
-          }
+          const nextPayload: RoomAccessPayload = previousPayload
+            ? {
+                ...previousPayload,
+                room: snapshot.room,
+                serverNow: snapshot.serverNow,
+                onlineCount: snapshot.onlineCount,
+              }
+            : {
+                room: snapshot.room,
+                role,
+                permissions: getRolePermissions(role),
+                links: undefined,
+                serverNow: snapshot.serverNow,
+                onlineCount: snapshot.onlineCount,
+              };
 
-          const nextPayload: RoomAccessPayload = {
-            ...previousPayload,
-            room: snapshot.room,
-            serverNow: snapshot.serverNow,
-            onlineCount: snapshot.onlineCount,
-          };
-
-          return shouldReusePayload(previousPayload, nextPayload)
-            ? previousPayload
-            : nextPayload;
+          return shouldReusePayload(previousPayload, nextPayload) ? previousPayload : nextPayload;
         });
 
         if (snapshot.room.clock.isRunning) {
@@ -107,6 +124,14 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
       }
     };
 
+    source.addEventListener("voice-signal", (event) => {
+      try {
+        setLastVoiceSignal(JSON.parse((event as MessageEvent).data) as VoiceSignalEnvelope);
+      } catch {
+        setConnection("offline");
+      }
+    });
+
     source.onerror = () => {
       setConnection("offline");
     };
@@ -114,7 +139,7 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
     return () => {
       source.close();
     };
-  }, [clientId, role, roomId, token]);
+  }, [clientId, presenceId, role, roomId, token]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -134,6 +159,8 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
     error,
     refresh,
     serverOffset,
+    clientId,
+    lastVoiceSignal,
     setPayload: applyPayload,
   };
 }

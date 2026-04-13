@@ -13,7 +13,7 @@ export const DEFAULT_CONFIG: RoomConfig = {
 export const DEFAULT_ROOM_INPUT: CreateRoomInput = {
   topic: "本场辩题待定",
   rulesText:
-    "第一版在线棋钟：主持人可全控，辩手只能结束自己一方回合，观众可发弹幕。请在此填写赛制说明、自由辩规则、超时处理等。",
+    "第一版在线棋钟：主持人可全控，辩手只能结束自己一方回合，观众可发送弹幕并旁听公共语音。请在此填写赛制说明、自由辩规则、超时处理等。",
   sides: {
     affirmativeName: "正方",
     negativeName: "反方",

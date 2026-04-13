@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { createRoom, listRooms, loginAdmin } from "./lib/api";
+import { createRoom, deleteRoom, listRooms, loginAdmin } from "./lib/api";
 import { describeRoomStatus, formatDateTime } from "./lib/format";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { DEFAULT_ROOM_INPUT } from "./shared/defaults";
@@ -29,6 +29,7 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
   const [draft, setDraft] = useState<CreateRoomInput>(() => createDraft());
   const [loginPassword, setLoginPassword] = useState("");
   const [busy, setBusy] = useState<"login" | "create" | "refresh" | null>(null);
+  const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [latestRoom, setLatestRoom] = useState<RoomSummary | null>(null);
   const hasSession = adminToken.trim().length > 0;
@@ -115,6 +116,25 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
     }
   };
 
+  const handleDeleteRoom = async (room: RoomSummary) => {
+    if (!window.confirm(`确认删除房间“${room.topic}”吗？此操作无法撤销。`)) {
+      return;
+    }
+
+    setDeletingRoomId(room.roomId);
+    setError(null);
+
+    try {
+      await deleteRoom(adminToken, room.roomId);
+      setRooms((previousRooms) => previousRooms.filter((item) => item.roomId !== room.roomId));
+      setLatestRoom((previousRoom) => (previousRoom?.roomId === room.roomId ? null : previousRoom));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "删除房间失败");
+    } finally {
+      setDeletingRoomId(null);
+    }
+  };
+
   const updateInitialMinutes = (minutes: number) => {
     setDraft((previousDraft) => ({
       ...previousDraft,
@@ -140,10 +160,8 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
       <main className="page-grid page-grid--single">
         <section className="card card--hero">
           <span className="card__eyebrow">主持人后台</span>
-          <h2>先用后台口令登录，再创建和管理辩论房间。</h2>
-          <p>
-            第一版后台采用单主持人账号方案，适合大排档当前的开房流程。登录成功后可以创建房间并复制四类权限链接。
-          </p>
+          <h2>先登录后台，再创建和管理辩论房间。</h2>
+          <p>登录成功后，你可以创建房间、复制四类访问链接，并管理已经创建的房间。</p>
         </section>
 
         <section className="card">
@@ -153,7 +171,7 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
               <input
                 type="password"
                 value={loginPassword}
-                placeholder="输入 Cloudflare Worker 中配置的后台密码"
+                placeholder="输入部署在 Worker 中的后台密码"
                 onChange={(event) => setLoginPassword(event.target.value)}
               />
             </label>
@@ -172,7 +190,7 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
       <section className="card">
         <div className="card__header">
           <div>
-            <span className="card__eyebrow">开房间后台</span>
+            <span className="card__eyebrow">开房后台</span>
             <h2>创建新房间</h2>
           </div>
           <button type="button" className="button button--ghost" onClick={() => setAdminToken("")}>
@@ -186,9 +204,7 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
             <input
               type="text"
               value={draft.topic}
-              onChange={(event) =>
-                setDraft((previousDraft) => ({ ...previousDraft, topic: event.target.value }))
-              }
+              onChange={(event) => setDraft((previousDraft) => ({ ...previousDraft, topic: event.target.value }))}
             />
           </label>
 
@@ -234,7 +250,7 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
 
           <div className="split-fields">
             <label>
-              每方初始发言分钟
+              每方初始分钟
               <input
                 type="number"
                 min="0.5"
@@ -244,7 +260,7 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
               />
             </label>
             <label>
-              全场总时长分钟
+              全场总分钟
               <input
                 type="number"
                 min="1"
@@ -288,14 +304,14 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
           {latestRoom ? (
             <LinkStack links={latestRoom.links} />
           ) : (
-            <p className="empty-state">创建房间后，主持人/辩手/观众四类链接会出现在这里。</p>
+            <p className="empty-state">创建房间后，主持人、正方、反方、观众四类链接会显示在这里。</p>
           )}
         </section>
 
         <section className="card">
           <div className="card__header">
             <div>
-              <span className="card__eyebrow">房间清单</span>
+              <span className="card__eyebrow">房间列表</span>
               <h2>已开房间 {rooms.length} 个</h2>
             </div>
             <button
@@ -326,6 +342,14 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
                   </button>
                   <button type="button" className="button button--ghost" onClick={() => onOpenRoom(room.links.viewer)}>
                     打开观众页
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--ghost"
+                    disabled={deletingRoomId === room.roomId}
+                    onClick={() => void handleDeleteRoom(room)}
+                  >
+                    {deletingRoomId === room.roomId ? "删除中..." : "删除房间"}
                   </button>
                 </div>
               </article>

@@ -32,6 +32,15 @@ const worker: ExportedHandler<WorkerEnv> = {
       return handleAdminCreateRoom(request, env, url.origin);
     }
 
+    if (request.method === "DELETE" && url.pathname.startsWith("/api/admin/rooms/")) {
+      const adminError = await requireAdmin(request, env);
+      if (adminError) {
+        return adminError;
+      }
+
+      return handleAdminDeleteRoom(request, env, url.origin);
+    }
+
     if (url.pathname.startsWith("/api/rooms/")) {
       return proxyRoomRequest(request, env);
     }
@@ -96,6 +105,31 @@ async function handleAdminCreateRoom(
   }));
 
   return response;
+}
+
+async function handleAdminDeleteRoom(
+  request: Request,
+  env: WorkerEnv,
+  origin: string,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const segments = url.pathname.split("/").filter(Boolean);
+  const roomId = segments[3];
+
+  if (!roomId) {
+    return json({ error: "房间路径不完整" }, 404);
+  }
+
+  const stub = env.ROOMS.get(env.ROOMS.idFromName(roomId));
+  return stub.fetch(
+    new Request(`${origin}/admin/delete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ roomId, origin }),
+    }),
+  );
 }
 
 async function proxyRoomRequest(request: Request, env: WorkerEnv): Promise<Response> {
@@ -198,6 +232,8 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      Pragma: "no-cache",
     },
   });
 }

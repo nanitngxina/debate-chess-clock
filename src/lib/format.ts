@@ -46,7 +46,7 @@ export function describeRoomStatus(summary: RoomSummary): string {
   }
 
   if (summary.clock.activeSide) {
-    return "暂停中";
+    return "已暂停";
   }
 
   return "待开始";

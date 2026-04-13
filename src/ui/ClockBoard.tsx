@@ -23,7 +23,7 @@ export function ClockBoard({ room, clock }: ClockBoardProps) {
         <span className="clock-card__eyebrow">全场剩余</span>
         <h2>第 {clock.currentRound} 回合</h2>
         <strong>{formatDurationFromMs(clock.totalRemainingMs)}</strong>
-        <p>{clock.isRunning ? "比赛进行中" : clock.activeSide ? "已暂停" : "等待开场"}</p>
+        <p>{clock.isRunning ? "比赛进行中" : clock.activeSide ? "已暂停" : "等待开始"}</p>
       </article>
 
       <article
