@@ -157,14 +157,14 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
 
   if (!hasSession) {
     return (
-      <main className="page-grid page-grid--single">
+      <main className="page-grid page-grid--single dashboard-shell dashboard-shell--login">
         <section className="card card--hero">
           <span className="card__eyebrow">主持人后台</span>
           <h2>先登录后台，再创建和管理辩论房间。</h2>
           <p>登录成功后，你可以创建房间、复制四类访问链接，并管理已经创建的房间。</p>
         </section>
 
-        <section className="card">
+        <section className="card card--editor">
           <form className="stack-form" onSubmit={handleLogin}>
             <label>
               主持人后台口令
@@ -186,8 +186,8 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
   }
 
   return (
-    <main className="page-grid">
-      <section className="card">
+    <main className="page-grid dashboard-shell dashboard-shell--control">
+      <section className="card card--editor">
         <div className="card__header">
           <div>
             <span className="card__eyebrow">开房后台</span>
@@ -292,8 +292,8 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
         {error && <p className="feedback feedback--error">{error}</p>}
       </section>
 
-      <section className="stack-section">
-        <section className="card">
+      <section className="stack-section stack-section--sidebar">
+        <section className="card card--share">
           <div className="card__header">
             <div>
               <span className="card__eyebrow">最新开房</span>
@@ -308,7 +308,7 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
           )}
         </section>
 
-        <section className="card">
+        <section className="card card--history">
           <div className="card__header">
             <div>
               <span className="card__eyebrow">房间列表</span>

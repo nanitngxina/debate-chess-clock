@@ -1,4 +1,7 @@
 import {
+  AccountInput,
+  AccountResponse,
+  AccountSessionResponse,
   AdminLoginResponse,
   BarrageRequest,
   CommandRequest,
@@ -77,6 +80,31 @@ export async function loginAdmin(password: string): Promise<AdminLoginResponse> 
   return requestJson<AdminLoginResponse>("/api/admin/login", {
     method: "POST",
     body: JSON.stringify({ password }),
+  });
+}
+
+export async function registerAccount(input: AccountInput): Promise<AccountSessionResponse> {
+  return requestJson<AccountSessionResponse>("/api/accounts/register", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function fetchMyAccount(token: string): Promise<AccountResponse> {
+  return requestJson<AccountResponse>("/api/accounts/me", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function updateMyAccount(token: string, input: AccountInput): Promise<AccountResponse> {
+  return requestJson<AccountResponse>("/api/accounts/me", {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
   });
 }
 

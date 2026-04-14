@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { usePersistentState } from "./hooks/usePersistentState";
+import { useEffect, useRef, useState } from "react";
 import { useLiveClock } from "./hooks/useLiveClock";
 import { useRoomRealtime } from "./hooks/useRoomRealtime";
 import { useVoiceChat } from "./hooks/useVoiceChat";
@@ -7,7 +6,8 @@ import { sendBarrage, sendRoomCommand } from "./lib/api";
 import { describeConnection, describeRole, describeSide, formatDateTime } from "./lib/format";
 import { DEFAULT_ROOM_INPUT, MAX_BARRAGE_ITEMS } from "./shared/defaults";
 import { cloneConfig, minutesToSeconds, secondsToMinutes } from "./shared/engine";
-import { BarrageMessage, RoomCommand, RoomRole } from "./shared/types";
+import { AccountProfile, BarrageMessage, RoomCommand, RoomRole } from "./shared/types";
+import { isSoundEnabled, playSound } from "./utils/soundUtils";
 import { BarragePanel } from "./ui/BarragePanel";
 import { ClockBoard } from "./ui/ClockBoard";
 import { LinkStack } from "./ui/LinkStack";
@@ -28,9 +28,10 @@ function readAccessFromQuery(): { role: RoomRole | null; token: string } {
 
 interface RoomPageProps {
   roomId: string;
+  account: AccountProfile | null;
 }
 
-export function RoomPage({ roomId }: RoomPageProps) {
+export function RoomPage({ roomId, account }: RoomPageProps) {
   const { role, token } = readAccessFromQuery();
 
   if (!role || !token) {
@@ -45,16 +46,17 @@ export function RoomPage({ roomId }: RoomPageProps) {
     );
   }
 
-  return <RoomPageInner roomId={roomId} role={role} token={token} />;
+  return <RoomPageInner roomId={roomId} role={role} token={token} account={account} />;
 }
 
 interface RoomPageInnerProps {
   roomId: string;
   role: RoomRole;
   token: string;
+  account: AccountProfile | null;
 }
 
-function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
+function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
   const { payload, connection, error, refresh, serverOffset, clientId, lastVoiceSignal, setPayload } =
     useRoomRealtime(roomId, role, token);
   const liveClock = useLiveClock(payload?.room.clock ?? null, serverOffset);
@@ -69,14 +71,16 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
   const [customSeconds, setCustomSeconds] = useState(30);
   const [draftSeedRoomId, setDraftSeedRoomId] = useState("");
   const [barrageItems, setBarrageItems] = useState<BarrageMessage[]>([]);
-  const [voiceNickname, setVoiceNickname] = usePersistentState("debate-voice-nickname", "");
+  const hasObservedClockRef = useRef(false);
+  const previousRemainingRef = useRef<{ affirmative: number; negative: number } | null>(null);
+  const accountDisplayName = account?.displayName ?? "";
 
   const voiceChat = useVoiceChat({
     roomId,
     role,
     token,
     clientId,
-    nickname: voiceNickname,
+    nickname: accountDisplayName,
     payload,
     lastVoiceSignal,
     setPayload,
@@ -102,6 +106,39 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
 
     setBarrageItems(payload.room.barrage);
   }, [payload]);
+
+  useEffect(() => {
+    if (!payload) {
+      return;
+    }
+
+    const clock = liveClock ?? payload.room.clock;
+    const nextRemaining = {
+      affirmative: clock.affirmativeRemainingMs,
+      negative: clock.negativeRemainingMs,
+    };
+
+    if (!hasObservedClockRef.current) {
+      hasObservedClockRef.current = true;
+      previousRemainingRef.current = nextRemaining;
+      return;
+    }
+
+    const previousRemaining = previousRemainingRef.current;
+    if (!previousRemaining) {
+      previousRemainingRef.current = nextRemaining;
+      return;
+    }
+
+    const affirmativeTimedOut = previousRemaining.affirmative > 0 && nextRemaining.affirmative <= 0;
+    const negativeTimedOut = previousRemaining.negative > 0 && nextRemaining.negative <= 0;
+
+    if ((affirmativeTimedOut || negativeTimedOut) && isSoundEnabled()) {
+      playSound("round-end");
+    }
+
+    previousRemainingRef.current = nextRemaining;
+  }, [liveClock, payload]);
 
   const runCommand = async (command: RoomCommand, actionKey: string) => {
     setPendingAction(actionKey);
@@ -165,49 +202,53 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
       : clock.activeSide === "affirmative"
         ? room.sides.affirmativeName
         : room.sides.negativeName;
+  const isHostView = payload.permissions.canModerate;
+  const layoutClassName = `room-layout ${isHostView ? "room-layout--host" : "room-layout--guest"}`;
 
   return (
-    <main className="room-layout">
-      <section className="card card--hero">
-        <div className="room-header">
-          <div>
-            <span className="card__eyebrow">房间 {room.roomId}</span>
-            <h1>{room.topic}</h1>
-            <p>{room.rulesText || "主持人还没有填写本场规则说明。"}</p>
+    <main className={layoutClassName}>
+      <section className="room-stage-shell">
+        <section className="card card--hero room-stage-intro">
+          <div className="room-header">
+            <div>
+              <span className="card__eyebrow">房间 {room.roomId}</span>
+              <h1>{room.topic}</h1>
+              <p>{room.rulesText || "主持人还没有填写本场规则说明。"}</p>
+            </div>
+            <div className="room-header__meta">
+              <span className="pill">{describeRole(role)}</span>
+              <span className={`pill pill--status pill--${connection}`}>{describeConnection(connection)}</span>
+              <span className="pill">{payload.onlineCount} 人在线</span>
+            </div>
           </div>
-          <div className="room-header__meta">
-            <span className="pill">{describeRole(role)}</span>
-            <span className={`pill pill--status pill--${connection}`}>{describeConnection(connection)}</span>
-            <span className="pill">{payload.onlineCount} 人在线</span>
-          </div>
-        </div>
 
-        <div className="room-banner">
-          <div>
-            <strong>当前发言方</strong>
-            <p>{activeSpeakerLabel}</p>
+          <div className="room-banner">
+            <div>
+              <strong>当前发言方</strong>
+              <p>{activeSpeakerLabel}</p>
+            </div>
+            <div>
+              <strong>回合</strong>
+              <p>第 {clock.currentRound} 回合</p>
+            </div>
+            <div>
+              <strong>最近同步</strong>
+              <p>{formatDateTime(room.updatedAt)}</p>
+            </div>
           </div>
-          <div>
-            <strong>回合</strong>
-            <p>第 {clock.currentRound} 回合</p>
-          </div>
-          <div>
-            <strong>最近同步</strong>
-            <p>{formatDateTime(room.updatedAt)}</p>
-          </div>
-        </div>
+        </section>
+
+        <ClockBoard room={room} clock={clock} />
       </section>
-
-      <ClockBoard room={room} clock={clock} />
 
       {(feedback || error) && (
         <p className={`feedback ${error ? "feedback--error" : "feedback--success"}`}>{error ?? feedback}</p>
       )}
 
       <section className="room-columns">
-        <section className="stack-section">
-          {payload.permissions.canModerate ? (
-            <section className="card">
+        <section className="stack-section stack-section--main">
+          {isHostView ? (
+            <section className="card card--command">
               <div className="card__header">
                 <div>
                   <span className="card__eyebrow">主持人控制台</span>
@@ -215,7 +256,7 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
                 </div>
               </div>
 
-              <div className="action-grid">
+              <div className="action-grid action-grid--primary">
                 <button
                   type="button"
                   className="button"
@@ -270,7 +311,7 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
                 </button>
               </div>
 
-              <div className="adjust-box">
+              <div className="adjust-box adjust-box--command">
                 <div className="split-fields">
                   <label>
                     调整对象
@@ -337,7 +378,7 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
               </div>
             </section>
           ) : (
-            <section className="card">
+            <section className="card card--rule">
               <div className="card__header">
                 <div>
                   <span className="card__eyebrow">当前权限</span>
@@ -363,9 +404,9 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
           )}
 
           <VoicePanel
+            account={account}
             role={role}
             currentChannel={voiceChat.channel}
-            nickname={voiceNickname}
             participants={voiceChat.participants}
             publicRequests={voiceChat.publicRequests}
             remoteStreams={voiceChat.remoteStreams}
@@ -375,7 +416,6 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
             canSpeakNow={voiceChat.canSpeakNow}
             hasPendingPublicRequest={voiceChat.hasPendingPublicRequest}
             error={voiceChat.error}
-            onNicknameChange={setVoiceNickname}
             onJoinVoice={voiceChat.joinVoice}
             onLeaveVoice={voiceChat.leaveVoice}
             onRequestPublicVoice={voiceChat.requestPublicVoice}
@@ -385,9 +425,9 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
             onToggleMute={voiceChat.toggleMute}
           />
 
-          {payload.permissions.canModerate && (
+          {isHostView && (
             <>
-              <section className="card">
+              <section className="card card--editor">
                 <div className="card__header">
                   <div>
                     <span className="card__eyebrow">内容编辑</span>
@@ -424,7 +464,7 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
                 </div>
               </section>
 
-              <section className="card">
+              <section className="card card--editor">
                 <div className="card__header">
                   <div>
                     <span className="card__eyebrow">参赛方</span>
@@ -470,7 +510,7 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
                 </button>
               </section>
 
-              <section className="card">
+              <section className="card card--editor">
                 <div className="card__header">
                   <div>
                     <span className="card__eyebrow">计时规则</span>
@@ -530,7 +570,7 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
               </section>
 
               {payload.links && (
-                <section className="card">
+                <section className="card card--share">
                   <div className="card__header">
                     <div>
                       <span className="card__eyebrow">分享</span>
@@ -543,7 +583,7 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
             </>
           )}
 
-          <section className="card">
+          <section className="card card--history">
             <div className="card__header">
               <div>
                 <span className="card__eyebrow">回合历史</span>
@@ -566,13 +606,16 @@ function RoomPageInner({ roomId, role, token }: RoomPageInnerProps) {
           </section>
         </section>
 
-        <BarragePanel
-          role={role}
-          items={barrageItems}
-          disabled={!payload.permissions.canSendBarrage}
-          sending={pendingAction === "barrage"}
-          onSend={handleBarrage}
-        />
+        <aside className="stack-section stack-section--sidebar room-sidebar">
+          <BarragePanel
+            account={account}
+            role={role}
+            items={barrageItems}
+            disabled={!payload.permissions.canSendBarrage || !account}
+            sending={pendingAction === "barrage"}
+            onSend={handleBarrage}
+          />
+        </aside>
       </section>
 
       <div className="room-footer-actions">

@@ -40,11 +40,11 @@ function getFallbackNickname(role: RoomRole): string {
     case "host":
       return "主持人";
     case "affirmative":
-      return "姝ｆ柟";
+      return "正方";
     case "negative":
-      return "鍙嶆柟";
+      return "反方";
     case "viewer":
-      return "瑙備紬";
+      return "观众";
   }
 }
 

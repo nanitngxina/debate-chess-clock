@@ -148,6 +148,28 @@ export interface CreateRoomInput {
   config: RoomConfig;
 }
 
+export interface AccountProfile {
+  accountId: string;
+  displayName: string;
+  avatarUrl: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AccountInput {
+  displayName: string;
+  avatarUrl: string;
+}
+
+export interface AccountResponse {
+  account: AccountProfile;
+}
+
+export interface AccountSessionResponse extends AccountResponse {
+  token: string;
+  expiresAt: number;
+}
+
 export type RoomCommand =
   | { type: "resume" }
   | { type: "pause" }

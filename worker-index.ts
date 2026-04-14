@@ -1,10 +1,18 @@
-import { CreateRoomInput, RoomSummary } from "./src/shared/types";
+import {
+  AccountInput,
+  AccountProfile,
+  CreateRoomInput,
+  RoomSummary,
+} from "./src/shared/types";
 import { RoomDurableObject } from "./worker-room-object";
 import { RoomBootstrapPayload, WorkerEnv } from "./worker-types";
 
 export { RoomDurableObject };
 
-const SESSION_SUBJECT = "debate-host-admin";
+const ADMIN_SESSION_SUBJECT = "debate-host-admin";
+const ACCOUNT_SESSION_SUBJECT_PREFIX = "debate-account:";
+const ACCOUNT_STORAGE_PREFIX = "account:";
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 
 const worker: ExportedHandler<WorkerEnv> = {
   async fetch(request, env) {
@@ -12,6 +20,18 @@ const worker: ExportedHandler<WorkerEnv> = {
 
     if (url.pathname === "/api/admin/login" && request.method === "POST") {
       return handleAdminLogin(request, env);
+    }
+
+    if (url.pathname === "/api/accounts/register" && request.method === "POST") {
+      return handleAccountRegister(request, env);
+    }
+
+    if (url.pathname === "/api/accounts/me" && request.method === "GET") {
+      return handleAccountMe(request, env);
+    }
+
+    if (url.pathname === "/api/accounts/me" && request.method === "PUT") {
+      return handleAccountUpdate(request, env);
     }
 
     if (url.pathname === "/api/admin/rooms" && request.method === "GET") {
@@ -63,9 +83,71 @@ async function handleAdminLogin(request: Request, env: WorkerEnv): Promise<Respo
   }
 
   const expiresAt = Date.now() + 1000 * 60 * 60 * 24 * 7;
-  const token = await signSession({ sub: SESSION_SUBJECT, exp: expiresAt }, env.ADMIN_SESSION_SECRET);
+  const token = await signSession({ sub: ADMIN_SESSION_SUBJECT, exp: expiresAt }, env.ADMIN_SESSION_SECRET);
 
   return json({ token, expiresAt });
+}
+
+async function handleAccountRegister(request: Request, env: WorkerEnv): Promise<Response> {
+  const payload = (await request.json()) as Partial<AccountInput>;
+  const displayName = sanitizeDisplayName(payload.displayName);
+
+  if (!displayName) {
+    return json({ error: "请先填写账户名称" }, 400);
+  }
+
+  const now = Date.now();
+  const account: AccountProfile = {
+    accountId: createAccountId(),
+    displayName,
+    avatarUrl: sanitizeAvatarUrl(payload.avatarUrl),
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await env.ROOM_DIRECTORY.put(getAccountStorageKey(account.accountId), JSON.stringify(account));
+
+  const expiresAt = now + SESSION_TTL_MS;
+  const token = await signSession(
+    { sub: `${ACCOUNT_SESSION_SUBJECT_PREFIX}${account.accountId}`, exp: expiresAt },
+    env.ADMIN_SESSION_SECRET,
+  );
+
+  return json({ token, expiresAt, account });
+}
+
+async function handleAccountMe(request: Request, env: WorkerEnv): Promise<Response> {
+  const account = await requireAccount(request, env);
+  if (account instanceof Response) {
+    return account;
+  }
+
+  return json({ account });
+}
+
+async function handleAccountUpdate(request: Request, env: WorkerEnv): Promise<Response> {
+  const account = await requireAccount(request, env);
+  if (account instanceof Response) {
+    return account;
+  }
+
+  const payload = (await request.json()) as Partial<AccountInput>;
+  const displayName = sanitizeDisplayName(payload.displayName);
+
+  if (!displayName) {
+    return json({ error: "请先填写账户名称" }, 400);
+  }
+
+  const nextAccount: AccountProfile = {
+    ...account,
+    displayName,
+    avatarUrl: sanitizeAvatarUrl(payload.avatarUrl),
+    updatedAt: Date.now(),
+  };
+
+  await env.ROOM_DIRECTORY.put(getAccountStorageKey(nextAccount.accountId), JSON.stringify(nextAccount));
+
+  return json({ account: nextAccount });
 }
 
 async function handleAdminRoomsList(env: WorkerEnv): Promise<Response> {
@@ -150,22 +232,53 @@ async function proxyRoomRequest(request: Request, env: WorkerEnv): Promise<Respo
 }
 
 async function requireAdmin(request: Request, env: WorkerEnv): Promise<Response | null> {
-  const header = request.headers.get("Authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+  const token = getBearerToken(request);
   if (!token) {
     return json({ error: "缺少后台令牌" }, 401);
   }
 
   const payload = await verifySession(token, env.ADMIN_SESSION_SECRET);
-  if (!payload || payload.sub !== SESSION_SUBJECT || payload.exp < Date.now()) {
+  if (!payload || payload.sub !== ADMIN_SESSION_SUBJECT || payload.exp < Date.now()) {
     return json({ error: "后台令牌无效或已过期" }, 401);
   }
 
   return null;
 }
 
+async function requireAccount(request: Request, env: WorkerEnv): Promise<AccountProfile | Response> {
+  const token = getBearerToken(request);
+  if (!token) {
+    return json({ error: "缺少账户令牌" }, 401);
+  }
+
+  const payload = await verifySession(token, env.ADMIN_SESSION_SECRET);
+  if (!payload || payload.exp < Date.now() || !payload.sub.startsWith(ACCOUNT_SESSION_SUBJECT_PREFIX)) {
+    return json({ error: "账户令牌无效或已过期" }, 401);
+  }
+
+  const accountId = payload.sub.slice(ACCOUNT_SESSION_SUBJECT_PREFIX.length);
+  if (!accountId) {
+    return json({ error: "账户令牌无效" }, 401);
+  }
+
+  const account = await env.ROOM_DIRECTORY.get<AccountProfile>(getAccountStorageKey(accountId), { type: "json" });
+  if (!account) {
+    return json({ error: "账户不存在" }, 404);
+  }
+
+  return account;
+}
+
 function createRoomId(): string {
   return `room-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createAccountId(): string {
+  return `acct-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getAccountStorageKey(accountId: string): string {
+  return `${ACCOUNT_STORAGE_PREFIX}${accountId}`;
 }
 
 async function signSession(
@@ -196,6 +309,37 @@ async function verifySession(
     return JSON.parse(jsonText) as { sub: string; exp: number };
   } catch {
     return null;
+  }
+}
+
+function getBearerToken(request: Request): string {
+  const header = request.headers.get("Authorization") ?? "";
+  return header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+}
+
+function sanitizeDisplayName(value: string | undefined): string {
+  return (value ?? "").trim().replace(/\s+/g, " ").slice(0, 20);
+}
+
+function sanitizeAvatarUrl(value: string | undefined): string {
+  const trimmed = (value ?? "").trim().slice(0, 5000);
+  if (!trimmed) {
+    return "";
+  }
+
+  if (trimmed.startsWith("data:image/")) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return "";
+    }
+
+    return parsed.toString();
+  } catch {
+    return "";
   }
 }
 

@@ -1,9 +1,10 @@
-﻿import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { describeRole, formatDateTime } from "../lib/format";
-import { usePersistentState } from "../hooks/usePersistentState";
-import { BarrageMessage, RoomRole } from "../shared/types";
+import { AccountProfile, BarrageMessage, RoomRole } from "../shared/types";
+import { AccountAvatar } from "./AccountAvatar";
 
 interface BarragePanelProps {
+  account: AccountProfile | null;
   role: RoomRole;
   items: BarrageMessage[];
   disabled?: boolean;
@@ -12,13 +13,13 @@ interface BarragePanelProps {
 }
 
 export function BarragePanel({
+  account,
   role,
   items,
   disabled = false,
   sending = false,
   onSend,
 }: BarragePanelProps) {
-  const [nickname, setNickname] = usePersistentState("debate-barrage-nickname", "");
   const [content, setContent] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -36,11 +37,11 @@ export function BarragePanel({
     event.preventDefault();
     const nextContent = content.trim();
 
-    if (!nextContent) {
+    if (!nextContent || !account) {
       return;
     }
 
-    await onSend(nickname.trim() || "路人", nextContent);
+    await onSend(account.displayName, nextContent);
     setContent("");
   };
 
@@ -50,19 +51,37 @@ export function BarragePanel({
     }
 
     event.preventDefault();
-    if (!disabled && !sending) {
+    if (!disabled && !sending && account) {
       formRef.current?.requestSubmit();
     }
   };
 
   return (
-    <section className="card">
+    <section className="card barrage-panel">
       <div className="card__header">
         <div>
           <span className="card__eyebrow">实时互动</span>
           <h3>弹幕区</h3>
         </div>
         <span className="pill">{describeRole(role)}</span>
+      </div>
+
+      <div className="account-inline">
+        {account ? (
+          <>
+            <AccountAvatar
+              displayName={account.displayName}
+              avatarUrl={account.avatarUrl}
+              className="account-avatar--small"
+            />
+            <div>
+              <strong>{account.displayName}</strong>
+              <span>将以当前账户身份发送弹幕</span>
+            </div>
+          </>
+        ) : (
+          <p className="empty-state">先在顶部注册账户，再发送弹幕。</p>
+        )}
       </div>
 
       <div className="barrage-list" ref={listRef}>
@@ -81,23 +100,15 @@ export function BarragePanel({
       </div>
 
       <form className="barrage-form" onSubmit={handleSubmit} ref={formRef}>
-        <input
-          type="text"
-          maxLength={20}
-          value={nickname}
-          disabled={disabled}
-          placeholder="你的昵称"
-          onChange={(event) => setNickname(event.target.value)}
-        />
         <textarea
           maxLength={120}
           value={content}
-          disabled={disabled}
+          disabled={disabled || !account}
           placeholder="发一条弹幕，房间内所有人会实时看到"
           onChange={(event) => setContent(event.target.value)}
           onKeyDown={handleTextareaKeyDown}
         />
-        <button type="submit" className="button" disabled={disabled || sending}>
+        <button type="submit" className="button" disabled={disabled || sending || !account}>
           {sending ? "发送中..." : "发送弹幕"}
         </button>
       </form>

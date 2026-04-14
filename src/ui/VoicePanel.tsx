@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { describeRole } from "../lib/format";
-import { RoomRole, VoiceChannel, VoiceParticipant, VoiceRequest } from "../shared/types";
+import { AccountProfile, RoomRole, VoiceChannel, VoiceParticipant, VoiceRequest } from "../shared/types";
+import { AccountAvatar } from "./AccountAvatar";
 
 interface RemoteAudioStream {
   clientId: string;
@@ -9,9 +10,9 @@ interface RemoteAudioStream {
 }
 
 interface VoicePanelProps {
+  account: AccountProfile | null;
   role: RoomRole;
   currentChannel: VoiceChannel;
-  nickname: string;
   participants: VoiceParticipant[];
   publicRequests: VoiceRequest[];
   remoteStreams: RemoteAudioStream[];
@@ -21,7 +22,6 @@ interface VoicePanelProps {
   canSpeakNow: boolean;
   hasPendingPublicRequest: boolean;
   error: string | null;
-  onNicknameChange: (value: string) => void;
   onJoinVoice: () => void | Promise<void>;
   onLeaveVoice: () => void | Promise<void>;
   onToggleMute: () => void | Promise<void>;
@@ -84,9 +84,9 @@ function RemoteAudio({ stream }: { stream: MediaStream }) {
 }
 
 export function VoicePanel({
+  account,
   role,
   currentChannel,
-  nickname,
   participants,
   publicRequests,
   remoteStreams,
@@ -96,7 +96,6 @@ export function VoicePanel({
   canSpeakNow,
   hasPendingPublicRequest,
   error,
-  onNicknameChange,
   onJoinVoice,
   onLeaveVoice,
   onToggleMute,
@@ -119,24 +118,29 @@ export function VoicePanel({
 
       <p className="voice-panel__intro">{describeVoiceNotice(role, currentChannel, canSpeakNow)}</p>
 
-      {role === "viewer" && (
-        <label>
-          观众昵称
-          <input
-            type="text"
-            maxLength={20}
-            value={nickname}
-            placeholder="给自己取一个名字"
-            onChange={(event) => onNicknameChange(event.target.value)}
-          />
-        </label>
-      )}
+      <div className="account-inline">
+        {account ? (
+          <>
+            <AccountAvatar
+              displayName={account.displayName}
+              avatarUrl={account.avatarUrl}
+              className="account-avatar--small"
+            />
+            <div>
+              <strong>{account.displayName}</strong>
+              <span>进入语音时会自动使用当前账户名称</span>
+            </div>
+          </>
+        ) : (
+          <p className="empty-state">先在顶部注册账户，再加入语音频道。</p>
+        )}
+      </div>
 
       <div className="voice-panel__actions">
         <button
           type="button"
           className="button"
-          disabled={joining}
+          disabled={joining || !account}
           onClick={() => {
             void (isJoined ? onLeaveVoice() : onJoinVoice());
           }}
@@ -161,7 +165,7 @@ export function VoicePanel({
           <button
             type="button"
             className="button button--ghost"
-            disabled={joining || hasPendingPublicRequest}
+            disabled={joining || hasPendingPublicRequest || !account}
             onClick={() => {
               void onRequestPublicVoice();
             }}
