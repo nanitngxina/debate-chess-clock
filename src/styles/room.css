@@ -1,0 +1,462 @@
+/* ===========================================================================
+   房间页（主持 CONTROL ROOM / 辩手视图 / 观众 LIVE BROADCAST）
+   ---------------------------------------------------------------------------
+   共同结构：房间状态条 → 计时器（视觉主体）→ 角色专属操作 → 语音 / 弹幕 / 历史。
+   主持人的配置项收进右侧抽屉，屏幕上优先展示比赛控制。
+   =========================================================================== */
+
+.room {
+  flex: 1 1 auto;
+  padding-bottom: var(--sp-8);
+}
+
+/* ---------------------------------------------------------------------------
+   房间状态条
+   --------------------------------------------------------------------------- */
+
+.room-bar {
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-1);
+}
+
+.room-bar__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  min-height: 52px;
+  padding-block: var(--sp-2);
+  color: var(--text-muted);
+}
+
+.room-bar__group {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.room-bar__group--center {
+  flex: 1 1 260px;
+  justify-content: center;
+}
+
+.room-bar__group--end {
+  margin-left: auto;
+}
+
+.room-bar__id {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.room-bar__topic {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+  max-width: 46ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-feedback {
+  padding-top: var(--sp-4);
+}
+
+.room-feedback .feedback {
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   舞台与网格
+   --------------------------------------------------------------------------- */
+
+.room__stage {
+  display: grid;
+  gap: var(--sp-4);
+  padding-top: var(--sp-6);
+}
+
+.room__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: var(--sp-6);
+  margin-top: var(--sp-6);
+  align-items: start;
+}
+
+.room__col {
+  display: grid;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+.room__side {
+  min-width: 0;
+}
+
+.room__foot {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-5);
+  flex-wrap: wrap;
+  margin-top: var(--sp-7);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border-soft);
+}
+
+.room__rules {
+  font-size: var(--fs-sm);
+  line-height: 1.7;
+  color: var(--text-muted);
+  max-width: 72ch;
+  white-space: pre-wrap;
+}
+
+/* ---------------------------------------------------------------------------
+   主持人操作台
+   --------------------------------------------------------------------------- */
+
+.deck {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--panel-1);
+}
+
+.deck__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.deck__row--adjust,
+.deck__row--pick {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-soft);
+}
+
+.deck__select {
+  width: auto;
+  min-width: 108px;
+}
+
+.deck__custom {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: var(--sp-2);
+}
+
+.deck__custom .input {
+  width: 96px;
+}
+
+/* ---------------------------------------------------------------------------
+   辩手操作
+   --------------------------------------------------------------------------- */
+
+.debater-deck {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.debater-deck .btn {
+  flex: 1 1 220px;
+}
+
+/* ---------------------------------------------------------------------------
+   回合历史
+   --------------------------------------------------------------------------- */
+
+.history {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--panel-1);
+  overflow: hidden;
+}
+
+.history__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.history__list {
+  display: grid;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto auto;
+  gap: var(--sp-3);
+  align-items: center;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border-soft);
+  font-size: var(--fs-sm);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item__round {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+.history-item__side {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item__bonus {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--live);
+}
+
+/* ---------------------------------------------------------------------------
+   弹幕（LIVE CHAT）
+   --------------------------------------------------------------------------- */
+
+.chat-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--panel-1);
+  overflow: hidden;
+  max-height: calc(100vh - 180px);
+}
+
+.chat-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.chat-panel__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--border-soft);
+  font-size: var(--fs-xs);
+}
+
+.chat-panel__identity-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.chat-list {
+  display: grid;
+  gap: var(--sp-3);
+  align-content: start;
+  min-height: 220px;
+  padding: var(--sp-3) var(--sp-4);
+  overflow-y: auto;
+}
+
+.chat-item__meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--fs-micro);
+}
+
+.chat-item__meta strong {
+  font-size: var(--fs-xs);
+  color: var(--text);
+}
+
+.chat-item__text {
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.chat-panel__form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+
+.chat-panel__input {
+  flex: 1 1 auto;
+  min-height: 44px;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   语音
+   --------------------------------------------------------------------------- */
+
+.voice-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--panel-1);
+  overflow: hidden;
+}
+
+.voice-panel__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.voice-panel__title {
+  margin-right: auto;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.voice-panel__body {
+  display: grid;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+}
+
+.voice-panel__note {
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.voice-panel__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+}
+
+.voice-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.voice-block {
+  display: grid;
+  gap: var(--sp-2);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border-soft);
+}
+
+.voice-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.voice-members {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.voice-member {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-size: var(--fs-sm);
+  min-width: 0;
+}
+
+.voice-member__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   响应式
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 1080px) {
+  .room__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-5);
+  }
+
+  .chat-panel {
+    max-height: none;
+  }
+
+  .chat-list {
+    max-height: 340px;
+  }
+}
+
+@media (max-width: 720px) {
+  .room-bar__group--center {
+    order: 3;
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+
+  .room-bar__group--end {
+    margin-left: auto;
+  }
+
+  .room-bar__topic {
+    max-width: 100%;
+  }
+
+  .room__stage {
+    padding-top: var(--sp-5);
+  }
+
+  .deck {
+    padding: var(--sp-3);
+  }
+
+  .deck__row .btn--lg,
+  .debater-deck .btn {
+    flex: 1 1 100%;
+  }
+
+  .deck__custom {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .deck__custom .input {
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  .history-item {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+  }
+
+  .history-item__bonus {
+    grid-column: 3;
+  }
+}

@@ -3,15 +3,22 @@ import { useLiveClock } from "./hooks/useLiveClock";
 import { useRoomRealtime } from "./hooks/useRoomRealtime";
 import { useVoiceChat } from "./hooks/useVoiceChat";
 import { sendBarrage, sendRoomCommand } from "./lib/api";
-import { describeConnection, describeRole, describeSide, formatDateTime } from "./lib/format";
+import {
+  describeConnection,
+  describeRole,
+  describeSide,
+  formatDateTime,
+  formatDurationFromMs,
+} from "./lib/format";
 import { DEFAULT_ROOM_INPUT, MAX_BARRAGE_ITEMS } from "./shared/defaults";
 import { cloneConfig, minutesToSeconds, secondsToMinutes } from "./shared/engine";
-import { AccountProfile, BarrageMessage, RoomCommand, RoomRole } from "./shared/types";
+import { AccountProfile, BarrageMessage, PublicRoomState, RoomClockState, RoomCommand, RoomRole } from "./shared/types";
 import { isSoundEnabled, playSound } from "./utils/soundUtils";
 import { BarragePanel } from "./ui/BarragePanel";
-import { ClockBoard } from "./ui/ClockBoard";
+import { BrandMark } from "./ui/BrandMark";
 import { LinkStack } from "./ui/LinkStack";
 import { RulesEditor } from "./ui/RulesEditor";
+import { TimerLab, TimerSideView } from "./ui/TimerLab";
 import { VoicePanel } from "./ui/VoicePanel";
 
 function readAccessFromQuery(): { role: RoomRole | null; token: string } {
@@ -26,6 +33,55 @@ function readAccessFromQuery(): { role: RoomRole | null; token: string } {
   return { role: null, token };
 }
 
+/** 房间号很长（room-xxxxxx-yyy），展示时去掉前缀并截断 */
+function shortRoomId(roomId: string): string {
+  return roomId.replace(/^room-/, "").toUpperCase();
+}
+
+function formatBonus(seconds: number): string {
+  if (seconds <= 0) {
+    return "—";
+  }
+
+  if (seconds < 60) {
+    return `+${seconds}s`;
+  }
+
+  return `+${Math.round((seconds / 60) * 10) / 10}min`;
+}
+
+/** 把服务端时钟状态映射成计时组件需要的两个「侧」 */
+function buildSides(
+  room: PublicRoomState,
+  clock: RoomClockState,
+  only?: "affirmative" | "negative",
+): TimerSideView[] {
+  const baseMs = Math.max(1000, room.config.initialTimeSeconds * 1000);
+
+  const make = (side: "affirmative" | "negative"): TimerSideView => {
+    const isAffirmative = side === "affirmative";
+    const remainingMs = isAffirmative ? clock.affirmativeRemainingMs : clock.negativeRemainingMs;
+    const isActiveSide = clock.activeSide === side;
+
+    return {
+      tone: isAffirmative ? "aff" : "neg",
+      label: isAffirmative ? "正方" : "反方",
+      name: isAffirmative ? room.sides.affirmativeName : room.sides.negativeName,
+      remainingMs,
+      totalMs: Math.max(baseMs, remainingMs),
+      active: isActiveSide && clock.isRunning,
+      done: remainingMs <= 0,
+      statusLabel: isActiveSide && !clock.isRunning ? "已暂停" : undefined,
+    };
+  };
+
+  if (only) {
+    return [make(only)];
+  }
+
+  return [make("affirmative"), make("negative")];
+}
+
 interface RoomPageProps {
   roomId: string;
   account: AccountProfile | null;
@@ -36,13 +92,17 @@ export function RoomPage({ roomId, account }: RoomPageProps) {
 
   if (!role || !token) {
     return (
-      <main className="page-grid page-grid--single">
-        <section className="card">
-          <span className="card__eyebrow">链接无效</span>
-          <h2>这个房间链接缺少角色或授权信息。</h2>
-          <p>请从主持人后台重新复制房间链接后再进入。</p>
-        </section>
-      </main>
+      <div className="gate">
+        <div className="gate__inner">
+          <div className="gate__brand">
+            <BrandMark size={40} />
+            <h1 className="gate__title">链接无效</h1>
+            <p className="gate__note">
+              这个房间链接缺少角色或授权信息。请让主持人重新复制链接后再进入。
+            </p>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -71,6 +131,7 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
   const [customSeconds, setCustomSeconds] = useState(30);
   const [draftSeedRoomId, setDraftSeedRoomId] = useState("");
   const [barrageItems, setBarrageItems] = useState<BarrageMessage[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const hasObservedClockRef = useRef(false);
   const previousRemainingRef = useRef<{ affirmative: number; negative: number } | null>(null);
   const accountDisplayName = account?.displayName ?? "";
@@ -173,7 +234,9 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
       const nextPayload = await sendBarrage(roomId, { role, token, nickname, content });
       setBarrageItems(nextPayload.room.barrage);
     } catch (barrageError) {
-      setBarrageItems((previousItems) => previousItems.filter((item) => item.id !== optimisticMessage.id));
+      setBarrageItems((previousItems) =>
+        previousItems.filter((item) => item.id !== optimisticMessage.id),
+      );
       setFeedback(barrageError instanceof Error ? barrageError.message : "弹幕发送失败");
     } finally {
       setPendingAction(null);
@@ -182,227 +245,554 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
 
   if (!payload) {
     return (
-      <main className="page-grid page-grid--single">
-        <section className="card">
-          <span className="card__eyebrow">房间载入中</span>
-          <h2>正在接入房间 {roomId}</h2>
-          <p>{error ?? "请稍等，实时状态马上就到。"}</p>
-        </section>
-      </main>
+      <div className="gate">
+        <div className="gate__inner">
+          <div className="gate__brand">
+            <BrandMark size={40} />
+            <h1 className="gate__title">正在接入房间</h1>
+            <p className="gate__note">{error ?? "请稍等，实时状态马上就到。"}</p>
+          </div>
+        </div>
+      </div>
     );
   }
 
   const room = payload.room;
   const clock = liveClock ?? room.clock;
   const mySide = payload.permissions.controlledSide;
-  const canEndMyTurn = Boolean(payload.permissions.canEndOwnTurn && mySide && clock.activeSide === mySide);
-  const activeSpeakerLabel =
-    clock.activeSide === null
-      ? "等待主持人指定"
-      : clock.activeSide === "affirmative"
-        ? room.sides.affirmativeName
-        : room.sides.negativeName;
+  const canEndMyTurn = Boolean(
+    payload.permissions.canEndOwnTurn && mySide && clock.activeSide === mySide,
+  );
   const isHostView = payload.permissions.canModerate;
-  const layoutClassName = `room-layout ${isHostView ? "room-layout--host" : "room-layout--guest"}`;
+  const isViewer = role === "viewer";
+  const busy = pendingAction !== null;
 
-  return (
-    <main className={layoutClassName}>
-      <section className="room-stage-shell">
-        <section className="card card--hero room-stage-intro">
-          <div className="room-header">
-            <div>
-              <span className="card__eyebrow">房间 {room.roomId}</span>
-              <h1>{room.topic}</h1>
-              <p>{room.rulesText || "主持人还没有填写本场规则说明。"}</p>
+  const roomBar = (
+    <header className="room-bar">
+      <div className="container room-bar__inner">
+        <div className="room-bar__group">
+          <BrandMark size={20} />
+          <span className="room-bar__id" title={room.roomId}>
+            Room {shortRoomId(room.roomId)}
+          </span>
+          <span className={`pill ${connection === "live" ? "pill--live" : "pill--warn"}`}>
+            {connection === "live" && <span className="dot dot--live" />}
+            {connection === "live" ? "Live" : describeConnection(connection)}
+          </span>
+        </div>
+
+        <div className="room-bar__group room-bar__group--center">
+          <span className="room-bar__topic">{room.topic}</span>
+          <span className="dim nowrap">第 {clock.currentRound} 回合</span>
+        </div>
+
+        <div className="room-bar__group room-bar__group--end">
+          <span className="pill pill--plain">{describeRole(role)}</span>
+          <span className="pill pill--plain">{payload.onlineCount} 人在线</span>
+        </div>
+      </div>
+    </header>
+  );
+
+  const feedbackBar = (error || feedback) && (
+    <div className="room-feedback">
+      <div className="container">
+        <p className={`feedback ${error ? "feedback--error" : "feedback--success"}`}>
+          {error ?? feedback}
+        </p>
+      </div>
+    </div>
+  );
+
+  /* ------------------------------------------------------------ 主持人 */
+
+  if (isHostView) {
+    return (
+      <div className="room room--host">
+        {roomBar}
+        {feedbackBar}
+
+        <div className="container room__stage">
+          <TimerLab
+            variant="room"
+            isLive={clock.isRunning}
+            roundLabel={`第 ${clock.currentRound} 回合`}
+            totalLabel={formatDurationFromMs(clock.totalRemainingMs)}
+            sides={buildSides(room, clock)}
+            statusExtra={<span>{clock.isRunning ? "Running" : "Paused"}</span>}
+          />
+
+          <section className="deck">
+            <div className="deck__row">
+              <button
+                type="button"
+                className={`btn btn--lg ${clock.isRunning ? "btn--warn" : "btn--live"}`}
+                disabled={busy}
+                onClick={() => void runCommand({ type: clock.isRunning ? "pause" : "resume" }, "run")}
+              >
+                {clock.isRunning ? "Ⅱ 暂停" : "▶ 开始"}
+              </button>
+              <button
+                type="button"
+                className="btn btn--lg"
+                disabled={busy || clock.activeSide === null}
+                onClick={() => void runCommand({ type: "switch-side" }, "switch")}
+              >
+                ⇄ 切换
+              </button>
+              <button
+                type="button"
+                className="btn btn--lg"
+                disabled={busy || clock.activeSide === null}
+                onClick={() => void runCommand({ type: "end-turn" }, "turn")}
+              >
+                ■ 结束回合
+              </button>
+              <button
+                type="button"
+                className="btn btn--lg btn--danger"
+                disabled={busy}
+                onClick={() => {
+                  if (window.confirm("确认重置当前棋钟吗？这会清空回合记录。")) {
+                    void runCommand({ type: "reset" }, "reset");
+                  }
+                }}
+              >
+                重置
+              </button>
+
+              <span className="spacer" />
+
+              <button
+                type="button"
+                className="btn btn--lg btn--ghost"
+                onClick={() => setSettingsOpen(true)}
+              >
+                比赛配置
+              </button>
+              <button
+                type="button"
+                className="btn btn--lg btn--ghost"
+                disabled={busy}
+                onClick={() => void refresh()}
+              >
+                重新同步
+              </button>
             </div>
-            <div className="room-header__meta">
-              <span className="pill">{describeRole(role)}</span>
-              <span className={`pill pill--status pill--${connection}`}>{describeConnection(connection)}</span>
-              <span className="pill">{payload.onlineCount} 人在线</span>
-            </div>
-          </div>
 
-          <div className="room-banner">
-            <div>
-              <strong>当前发言方</strong>
-              <p>{activeSpeakerLabel}</p>
-            </div>
-            <div>
-              <strong>回合</strong>
-              <p>第 {clock.currentRound} 回合</p>
-            </div>
-            <div>
-              <strong>最近同步</strong>
-              <p>{formatDateTime(room.updatedAt)}</p>
-            </div>
-          </div>
-        </section>
+            <div className="deck__row deck__row--adjust">
+              <span className="u-label">调整时间</span>
+              <select
+                className="select deck__select"
+                value={adjustTarget}
+                aria-label="调整对象"
+                onChange={(event) =>
+                  setAdjustTarget(event.target.value as "affirmative" | "negative" | "total")
+                }
+              >
+                <option value="affirmative">正方</option>
+                <option value="negative">反方</option>
+                <option value="total">全场</option>
+              </select>
 
-        <ClockBoard room={room} clock={clock} />
-      </section>
-
-      {(feedback || error) && (
-        <p className={`feedback ${error ? "feedback--error" : "feedback--success"}`}>{error ?? feedback}</p>
-      )}
-
-      <section className="room-columns">
-        <section className="stack-section stack-section--main">
-          {isHostView ? (
-            <section className="card card--command">
-              <div className="card__header">
-                <div>
-                  <span className="card__eyebrow">主持人控制台</span>
-                  <h2>快速操作</h2>
-                </div>
-              </div>
-
-              <div className="action-grid action-grid--primary">
-                <button
-                  type="button"
-                  className="button"
-                  disabled={pendingAction !== null}
-                  onClick={() => void runCommand({ type: clock.isRunning ? "pause" : "resume" }, "run")}
-                >
-                  {clock.isRunning ? "暂停" : "开始 / 继续"}
-                </button>
-                <button
-                  type="button"
-                  className="button button--ghost"
-                  disabled={pendingAction !== null || clock.activeSide === null}
-                  onClick={() => void runCommand({ type: "switch-side" }, "switch")}
-                >
-                  切边
-                </button>
-                <button
-                  type="button"
-                  className="button button--ghost"
-                  disabled={pendingAction !== null || clock.activeSide === null}
-                  onClick={() => void runCommand({ type: "end-turn" }, "turn")}
-                >
-                  结束当前回合
-                </button>
-                <button
-                  type="button"
-                  className="button button--ghost"
-                  disabled={pendingAction !== null}
-                  onClick={() => void runCommand({ type: "set-active-side", side: "affirmative" }, "affirmative")}
-                >
-                  正方先发
-                </button>
-                <button
-                  type="button"
-                  className="button button--ghost"
-                  disabled={pendingAction !== null}
-                  onClick={() => void runCommand({ type: "set-active-side", side: "negative" }, "negative")}
-                >
-                  反方先发
-                </button>
-                <button
-                  type="button"
-                  className="button button--danger"
-                  disabled={pendingAction !== null}
-                  onClick={() => {
-                    if (window.confirm("确认重置当前棋钟吗？这会清空回合记录。")) {
-                      void runCommand({ type: "reset" }, "reset");
-                    }
-                  }}
-                >
-                  重置
-                </button>
-              </div>
-
-              <div className="adjust-box adjust-box--command">
-                <div className="split-fields">
-                  <label>
-                    调整对象
-                    <select
-                      value={adjustTarget}
-                      onChange={(event) =>
-                        setAdjustTarget(event.target.value as "affirmative" | "negative" | "total")
-                      }
-                    >
-                      <option value="affirmative">正方</option>
-                      <option value="negative">反方</option>
-                      <option value="total">全场</option>
-                    </select>
-                  </label>
-                  <label>
-                    自定义秒数
-                    <input
-                      type="number"
-                      value={customSeconds}
-                      onChange={(event) => setCustomSeconds(Number(event.target.value) || 0)}
-                    />
-                  </label>
-                </div>
-
-                <div className="action-grid">
-                  {[-60, -30, -10, 10, 30, 60].map((delta) => (
-                    <button
-                      type="button"
-                      className="button button--ghost"
-                      key={delta}
-                      disabled={pendingAction !== null || clock.isRunning}
-                      onClick={() =>
-                        void runCommand(
-                          {
-                            type: "adjust-time",
-                            side: adjustTarget,
-                            amountSeconds: delta,
-                          },
-                          `adjust-${delta}`,
-                        )
-                      }
-                    >
-                      {delta > 0 ? `+${delta}s` : `${delta}s`}
-                    </button>
-                  ))}
+              <div className="btn-group">
+                {[-60, -30, -10, 10, 30, 60].map((delta) => (
                   <button
                     type="button"
-                    className="button"
-                    disabled={pendingAction !== null || clock.isRunning}
+                    className="btn"
+                    key={delta}
+                    disabled={busy || clock.isRunning}
                     onClick={() =>
                       void runCommand(
-                        {
-                          type: "adjust-time",
-                          side: adjustTarget,
-                          amountSeconds: customSeconds,
-                        },
-                        "adjust-custom",
+                        { type: "adjust-time", side: adjustTarget, amountSeconds: delta },
+                        `adjust-${delta}`,
                       )
                     }
                   >
-                    应用自定义秒数
+                    {delta > 0 ? `+${delta}s` : `${delta}s`}
                   </button>
-                </div>
+                ))}
               </div>
-            </section>
-          ) : (
-            <section className="card card--rule">
-              <div className="card__header">
-                <div>
-                  <span className="card__eyebrow">当前权限</span>
-                  <h2>房间操作限制</h2>
-                </div>
-              </div>
-              <p>
-                {role === "viewer"
-                  ? "观众可以发送弹幕并旁听公共语音，但不能控制棋钟。"
-                  : `${describeSide(mySide ?? "affirmative")}辩手只能结束自己一方的当前回合。`}
-              </p>
-              {role !== "viewer" && (
+
+              <div className="deck__custom">
+                <input
+                  className="input input--num"
+                  type="number"
+                  value={customSeconds}
+                  aria-label="自定义秒数"
+                  onChange={(event) => setCustomSeconds(Number(event.target.value) || 0)}
+                />
                 <button
                   type="button"
-                  className="button"
-                  disabled={!canEndMyTurn || pendingAction !== null}
-                  onClick={() => void runCommand({ type: "end-turn" }, "my-turn")}
+                  className="btn"
+                  disabled={busy || clock.isRunning}
+                  onClick={() =>
+                    void runCommand(
+                      { type: "adjust-time", side: adjustTarget, amountSeconds: customSeconds },
+                      "adjust-custom",
+                    )
+                  }
                 >
-                  {canEndMyTurn ? "结束本方回合" : "当前不是你方发言"}
+                  应用
+                </button>
+              </div>
+
+              {clock.isRunning && <span className="dim">计时进行中不能调整时间</span>}
+            </div>
+
+            <div className="deck__row deck__row--pick">
+              <span className="u-label">指定先发</span>
+              <button
+                type="button"
+                className="btn btn--sm"
+                disabled={busy}
+                onClick={() =>
+                  void runCommand({ type: "set-active-side", side: "affirmative" }, "affirmative")
+                }
+              >
+                正方先发
+              </button>
+              <button
+                type="button"
+                className="btn btn--sm"
+                disabled={busy}
+                onClick={() =>
+                  void runCommand({ type: "set-active-side", side: "negative" }, "negative")
+                }
+              >
+                反方先发
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <div className="container room__grid">
+          <div className="room__col">
+            <VoicePanel
+              account={account}
+              role={role}
+              currentChannel={voiceChat.channel}
+              participants={voiceChat.participants}
+              publicRequests={voiceChat.publicRequests}
+              remoteStreams={voiceChat.remoteStreams}
+              joining={voiceChat.joining}
+              isJoined={voiceChat.isJoined}
+              isMuted={voiceChat.isMuted}
+              canSpeakNow={voiceChat.canSpeakNow}
+              hasPendingPublicRequest={voiceChat.hasPendingPublicRequest}
+              error={voiceChat.error}
+              onJoinVoice={voiceChat.joinVoice}
+              onLeaveVoice={voiceChat.leaveVoice}
+              onRequestPublicVoice={voiceChat.requestPublicVoice}
+              onApprovePublicVoice={(requestClientId) =>
+                void runCommand(
+                  { type: "approve-public-voice", clientId: requestClientId },
+                  `approve-${requestClientId}`,
+                )
+              }
+              onToggleMute={voiceChat.toggleMute}
+            />
+
+            <RoundHistory room={room} />
+          </div>
+
+          <aside className="room__side">
+            <BarragePanel
+              account={account}
+              role={role}
+              items={barrageItems}
+              disabled={!payload.permissions.canSendBarrage || !account}
+              sending={pendingAction === "barrage"}
+              onSend={handleBarrage}
+            />
+          </aside>
+        </div>
+
+        {settingsOpen && (
+          <>
+            <div className="drawer-backdrop" onClick={() => setSettingsOpen(false)} />
+            <aside className="drawer" role="dialog" aria-label="比赛配置">
+              <div className="drawer__head">
+                <span className="surface__title">比赛配置</span>
+                <button
+                  type="button"
+                  className="btn btn--quiet btn--icon"
+                  aria-label="关闭"
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="drawer__body">
+                <div className="stack stack--lg">
+                  <section className="fieldset">
+                    <legend className="u-label">辩题</legend>
+                    <label className="field">
+                      <span className="field__label">当前辩题</span>
+                      <input
+                        className="input"
+                        type="text"
+                        value={topicDraft}
+                        onChange={(event) => setTopicDraft(event.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={busy}
+                      onClick={() => void runCommand({ type: "set-topic", topic: topicDraft }, "topic")}
+                    >
+                      保存辩题
+                    </button>
+                  </section>
+
+                  <section className="fieldset">
+                    <legend className="u-label">规则说明</legend>
+                    <label className="field">
+                      <span className="field__label">显示在房间页的规则</span>
+                      <textarea
+                        className="textarea"
+                        rows={4}
+                        value={rulesDraft}
+                        onChange={(event) => setRulesDraft(event.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={busy}
+                      onClick={() =>
+                        void runCommand({ type: "set-rules", rulesText: rulesDraft }, "rules")
+                      }
+                    >
+                      保存规则
+                    </button>
+                  </section>
+
+                  <section className="fieldset">
+                    <legend className="u-label">参赛方</legend>
+                    <label className="field">
+                      <span className="field__label">
+                        <span className="side-swatch side-swatch--aff" />
+                        正方名称
+                      </span>
+                      <input
+                        className="input"
+                        type="text"
+                        value={affirmativeDraft}
+                        onChange={(event) => setAffirmativeDraft(event.target.value)}
+                      />
+                    </label>
+                    <label className="field">
+                      <span className="field__label">
+                        <span className="side-swatch side-swatch--neg" />
+                        反方名称
+                      </span>
+                      <input
+                        className="input"
+                        type="text"
+                        value={negativeDraft}
+                        onChange={(event) => setNegativeDraft(event.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={busy}
+                      onClick={() =>
+                        void runCommand(
+                          {
+                            type: "set-sides",
+                            sides: {
+                              affirmativeName: affirmativeDraft,
+                              negativeName: negativeDraft,
+                            },
+                          },
+                          "sides",
+                        )
+                      }
+                    >
+                      保存双方名称
+                    </button>
+                  </section>
+
+                  <section className="fieldset">
+                    <legend className="u-label">计时配置</legend>
+                    <div className="field-grid">
+                      <label className="field">
+                        <span className="field__label">每方初始分钟</span>
+                        <input
+                          className="input input--num"
+                          type="number"
+                          min="0.5"
+                          step="0.5"
+                          value={secondsToMinutes(configDraft.initialTimeSeconds)}
+                          onChange={(event) =>
+                            setConfigDraft((previousConfig) => ({
+                              ...previousConfig,
+                              initialTimeSeconds: minutesToSeconds(Number(event.target.value) || 0),
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span className="field__label">全场总分钟</span>
+                        <input
+                          className="input input--num"
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={secondsToMinutes(configDraft.maxDurationSeconds)}
+                          onChange={(event) =>
+                            setConfigDraft((previousConfig) => ({
+                              ...previousConfig,
+                              maxDurationSeconds: minutesToSeconds(Number(event.target.value) || 0),
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+
+                    <RulesEditor
+                      rules={configDraft.bonusRules}
+                      disabled={clock.isRunning}
+                      onChange={(bonusRules) =>
+                        setConfigDraft((previousConfig) => ({ ...previousConfig, bonusRules }))
+                      }
+                    />
+
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={busy || clock.isRunning}
+                      onClick={() =>
+                        void runCommand({ type: "update-config", config: configDraft }, "config")
+                      }
+                    >
+                      在暂停状态下同步配置
+                    </button>
+                  </section>
+
+                  {payload.links && (
+                    <section className="fieldset">
+                      <legend className="u-label">分享链接</legend>
+                      <LinkStack links={payload.links} />
+                    </section>
+                  )}
+                </div>
+              </div>
+            </aside>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------ 辩手 / 观众 */
+
+  const soloSide = mySide ?? "affirmative";
+
+  return (
+    <div className={`room ${isViewer ? "room--viewer" : "room--debater"}`}>
+      {roomBar}
+      {feedbackBar}
+
+      <div className="container room__stage">
+        {isViewer ? (
+          <TimerLab
+            variant="room"
+            isLive={clock.isRunning}
+            roundLabel={`第 ${clock.currentRound} 回合`}
+            totalLabel={formatDurationFromMs(clock.totalRemainingMs)}
+            sides={buildSides(room, clock)}
+            foot={
+              <div className="row row--wrap">
+                {clock.activeSide && (
+                  <span className="pill pill--plain">
+                    当前发言 ·{" "}
+                    {clock.activeSide === "affirmative"
+                      ? room.sides.affirmativeName
+                      : room.sides.negativeName}
+                  </span>
+                )}
+              </div>
+            }
+          />
+        ) : (
+          <>
+            <TimerLab
+              variant="solo"
+              isLive={clock.isRunning}
+              roundLabel={`第 ${clock.currentRound} 回合`}
+              totalLabel={formatDurationFromMs(clock.totalRemainingMs)}
+              sides={buildSides(room, clock, soloSide)}
+              foot={
+                <span className="dim">
+                  对手剩余{" "}
+                  {formatDurationFromMs(
+                    soloSide === "affirmative"
+                      ? clock.negativeRemainingMs
+                      : clock.affirmativeRemainingMs,
+                  )}
+                </span>
+              }
+            />
+
+            <div className="debater-deck">
+              <button
+                type="button"
+                className={`btn btn--lg ${canEndMyTurn ? "btn--primary" : "btn--ghost"}`}
+                disabled={!canEndMyTurn || busy}
+                onClick={() => void runCommand({ type: "end-turn" }, "my-turn")}
+              >
+                {canEndMyTurn ? "结束本回合" : "当前不是你方发言"}
+              </button>
+
+              {voiceChat.isJoined ? (
+                <>
+                  <button
+                    type="button"
+                    className={`btn btn--lg ${voiceChat.isMuted ? "btn--ghost" : "btn--live"}`}
+                    disabled={voiceChat.joining || !voiceChat.canSpeakNow}
+                    onClick={() => void voiceChat.toggleMute()}
+                  >
+                    {voiceChat.isMuted ? "打开麦克风" : "麦克风已开"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--lg btn--quiet"
+                    disabled={voiceChat.joining}
+                    onClick={() => void voiceChat.leaveVoice()}
+                  >
+                    离开语音
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn--lg btn--ghost"
+                  disabled={voiceChat.joining || !account}
+                  onClick={() => void voiceChat.joinVoice()}
+                >
+                  {voiceChat.joining ? "处理中…" : "加入语音"}
                 </button>
               )}
-            </section>
-          )}
+            </div>
 
+            {voiceChat.isJoined && !voiceChat.canSpeakNow && (
+              <p className="feedback feedback--notice">
+                当前不是你方计时阶段，麦克风保持静音；轮到你方时即可开麦。
+              </p>
+            )}
+          </>
+        )}
+
+        {error && <p className="feedback feedback--error">{error}</p>}
+      </div>
+
+      <div className="container room__grid">
+        <div className="room__col">
           <VoicePanel
             account={account}
             role={role}
@@ -420,193 +810,18 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
             onLeaveVoice={voiceChat.leaveVoice}
             onRequestPublicVoice={voiceChat.requestPublicVoice}
             onApprovePublicVoice={(requestClientId) =>
-              void runCommand({ type: "approve-public-voice", clientId: requestClientId }, `approve-${requestClientId}`)
+              void runCommand(
+                { type: "approve-public-voice", clientId: requestClientId },
+                `approve-${requestClientId}`,
+              )
             }
             onToggleMute={voiceChat.toggleMute}
           />
 
-          {isHostView && (
-            <>
-              <section className="card card--editor">
-                <div className="card__header">
-                  <div>
-                    <span className="card__eyebrow">内容编辑</span>
-                    <h2>辩题与规则</h2>
-                  </div>
-                </div>
+          <RoundHistory room={room} />
+        </div>
 
-                <div className="stack-form">
-                  <label>
-                    辩题
-                    <input type="text" value={topicDraft} onChange={(event) => setTopicDraft(event.target.value)} />
-                  </label>
-                  <button
-                    type="button"
-                    className="button button--ghost"
-                    disabled={pendingAction !== null}
-                    onClick={() => void runCommand({ type: "set-topic", topic: topicDraft }, "topic")}
-                  >
-                    保存辩题
-                  </button>
-
-                  <label>
-                    规则说明
-                    <textarea rows={5} value={rulesDraft} onChange={(event) => setRulesDraft(event.target.value)} />
-                  </label>
-                  <button
-                    type="button"
-                    className="button button--ghost"
-                    disabled={pendingAction !== null}
-                    onClick={() => void runCommand({ type: "set-rules", rulesText: rulesDraft }, "rules")}
-                  >
-                    保存规则
-                  </button>
-                </div>
-              </section>
-
-              <section className="card card--editor">
-                <div className="card__header">
-                  <div>
-                    <span className="card__eyebrow">参赛方</span>
-                    <h2>更新双方名称</h2>
-                  </div>
-                </div>
-                <div className="split-fields">
-                  <label>
-                    正方名称
-                    <input
-                      type="text"
-                      value={affirmativeDraft}
-                      onChange={(event) => setAffirmativeDraft(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    反方名称
-                    <input
-                      type="text"
-                      value={negativeDraft}
-                      onChange={(event) => setNegativeDraft(event.target.value)}
-                    />
-                  </label>
-                </div>
-                <button
-                  type="button"
-                  className="button button--ghost"
-                  disabled={pendingAction !== null}
-                  onClick={() =>
-                    void runCommand(
-                      {
-                        type: "set-sides",
-                        sides: {
-                          affirmativeName: affirmativeDraft,
-                          negativeName: negativeDraft,
-                        },
-                      },
-                      "sides",
-                    )
-                  }
-                >
-                  保存双方名称
-                </button>
-              </section>
-
-              <section className="card card--editor">
-                <div className="card__header">
-                  <div>
-                    <span className="card__eyebrow">计时规则</span>
-                    <h2>更新配置</h2>
-                  </div>
-                </div>
-
-                <div className="split-fields">
-                  <label>
-                    每方初始分钟
-                    <input
-                      type="number"
-                      min="0.5"
-                      step="0.5"
-                      value={secondsToMinutes(configDraft.initialTimeSeconds)}
-                      onChange={(event) =>
-                        setConfigDraft((previousConfig) => ({
-                          ...previousConfig,
-                          initialTimeSeconds: minutesToSeconds(Number(event.target.value) || 0),
-                        }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    全场总分钟
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={secondsToMinutes(configDraft.maxDurationSeconds)}
-                      onChange={(event) =>
-                        setConfigDraft((previousConfig) => ({
-                          ...previousConfig,
-                          maxDurationSeconds: minutesToSeconds(Number(event.target.value) || 0),
-                        }))
-                      }
-                    />
-                  </label>
-                </div>
-
-                <RulesEditor
-                  rules={configDraft.bonusRules}
-                  disabled={clock.isRunning}
-                  onChange={(bonusRules) =>
-                    setConfigDraft((previousConfig) => ({ ...previousConfig, bonusRules }))
-                  }
-                />
-
-                <button
-                  type="button"
-                  className="button"
-                  disabled={pendingAction !== null || clock.isRunning}
-                  onClick={() => void runCommand({ type: "update-config", config: configDraft }, "config")}
-                >
-                  在暂停状态下同步配置
-                </button>
-              </section>
-
-              {payload.links && (
-                <section className="card card--share">
-                  <div className="card__header">
-                    <div>
-                      <span className="card__eyebrow">分享</span>
-                      <h2>房间邀请链接</h2>
-                    </div>
-                  </div>
-                  <LinkStack links={payload.links} />
-                </section>
-              )}
-            </>
-          )}
-
-          <section className="card card--history">
-            <div className="card__header">
-              <div>
-                <span className="card__eyebrow">回合历史</span>
-                <h2>最近操作</h2>
-              </div>
-            </div>
-            <div className="history-list">
-              {room.roundHistory.map((item) => (
-                <article className="history-item" key={item.id}>
-                  <strong>
-                    第 {item.round} 回合 · {describeSide(item.side)}
-                  </strong>
-                  <span>
-                    结束于 {formatDateTime(item.endedAt)}，自动加时 {item.bonusSeconds / 60} 分钟
-                  </span>
-                </article>
-              ))}
-              {room.roundHistory.length === 0 && <p className="empty-state">回合记录会显示在这里。</p>}
-            </div>
-          </section>
-        </section>
-
-        <aside className="stack-section stack-section--sidebar room-sidebar">
+        <aside className="room__side">
           <BarragePanel
             account={account}
             role={role}
@@ -616,13 +831,40 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
             onSend={handleBarrage}
           />
         </aside>
-      </section>
+      </div>
 
-      <div className="room-footer-actions">
-        <button type="button" className="button button--ghost" onClick={() => void refresh()}>
+      <div className="container room__foot">
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => void refresh()}>
           重新同步
         </button>
+        {room.rulesText && <p className="room__rules">{room.rulesText}</p>}
       </div>
-    </main>
+    </div>
+  );
+}
+
+function RoundHistory({ room }: { room: PublicRoomState }) {
+  return (
+    <section className="history">
+      <div className="history__head">
+        <span className="u-label">回合历史</span>
+        <span className="pill pill--plain">{room.roundHistory.length} 条</span>
+      </div>
+
+      <ul className="history__list">
+        {room.roundHistory.map((item) => (
+          <li className="history-item" key={item.id}>
+            <span className="history-item__round">R{String(item.round).padStart(2, "0")}</span>
+            <span className="history-item__side">{describeSide(item.side)}</span>
+            <span className="dim nowrap">{formatDateTime(item.endedAt)}</span>
+            <span className="history-item__bonus">{formatBonus(item.bonusSeconds)}</span>
+          </li>
+        ))}
+
+        {room.roundHistory.length === 0 && (
+          <li className="empty">回合结束后，记录会显示在这里。</li>
+        )}
+      </ul>
+    </section>
   );
 }

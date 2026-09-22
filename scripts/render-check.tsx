@@ -13,10 +13,14 @@ import { AboutPage } from "../src/pages/AboutPage";
 import { DashboardPage } from "../src/DashboardPage";
 import { GuidePage } from "../src/pages/GuidePage";
 import { MarketingPage } from "../src/MarketingPage";
+import { RoomPage } from "../src/RoomPage";
 import { AppHeader } from "../src/ui/AppHeader";
 import { AuthPanel } from "../src/ui/AuthPanel";
+import { BarragePanel } from "../src/ui/BarragePanel";
 import { TimerLab } from "../src/ui/TimerLab";
+import { VoicePanel } from "../src/ui/VoicePanel";
 import { AccountSession } from "../src/hooks/useAccountSession";
+import { AccountProfile } from "../src/shared/types";
 import { parseRoute } from "../src/lib/router";
 
 interface Case {
@@ -29,6 +33,16 @@ interface Case {
 const noop = () => undefined;
 
 /** AuthPanel 只读取这几个字段，构造一个最小替身即可（不在服务端跑副作用） */
+const fakeAccount: AccountProfile = {
+  accountId: "acct-test",
+  email: "tester@example.com",
+  displayName: "测试选手",
+  avatarUrl: "",
+  emailVerified: true,
+  createdAt: 0,
+  updatedAt: 0,
+};
+
 const fakeSession = {
   account: null,
   token: "",
@@ -152,6 +166,65 @@ const cases: Case[] = [
         }),
       ),
     expect: ["08:42.31", "06:17.82", "计时中", "等待", "12:34", "Total time"],
+  },
+  {
+    name: "barrage-panel",
+    render: () =>
+      renderToString(
+        createElement(BarragePanel, {
+          account: fakeAccount,
+          role: "viewer",
+          items: [
+            { id: "m1", nickname: "观众甲", content: "这一轮很精彩", role: "viewer", createdAt: 0 },
+          ],
+          onSend: async () => undefined,
+        }),
+      ),
+    expect: ["Live chat", "观众甲", "这一轮很精彩", "发送", "测试选手"],
+  },
+  {
+    name: "voice-panel",
+    render: () =>
+      renderToString(
+        createElement(VoicePanel, {
+          account: fakeAccount,
+          role: "host",
+          currentChannel: "public",
+          participants: [
+            {
+              clientId: "c1",
+              role: "host",
+              channel: "public",
+              nickname: "主持人",
+              joinedAt: 0,
+              muted: false,
+            },
+          ],
+          publicRequests: [],
+          remoteStreams: [],
+          joining: false,
+          isJoined: true,
+          isMuted: false,
+          canSpeakNow: true,
+          hasPendingPublicRequest: false,
+          error: null,
+          onJoinVoice: noop,
+          onLeaveVoice: noop,
+          onToggleMute: noop,
+          onRequestPublicVoice: noop,
+        }),
+      ),
+    expect: ["Voice", "公共语音", "已加入", "主持人", "开麦中"],
+  },
+  {
+    name: "room-invalid-link",
+    // 房间页从 URL query 读角色；服务端没有 window，这里给一个最小替身，
+    // 验证"链接无效"分支能渲染（完整房间界面需要真实 payload，无法静态渲染）
+    render: () => {
+      (globalThis as Record<string, unknown>).window = { location: { search: "" } };
+      return renderToString(createElement(RoomPage, { roomId: "room-demo", account: null }));
+    },
+    expect: ["链接无效", "请让主持人重新复制链接"],
   },
 ];
 

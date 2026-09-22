@@ -1,6 +1,12 @@
 import { useEffect, useRef } from "react";
 import { describeRole } from "../lib/format";
-import { AccountProfile, RoomRole, VoiceChannel, VoiceParticipant, VoiceRequest } from "../shared/types";
+import {
+  AccountProfile,
+  RoomRole,
+  VoiceChannel,
+  VoiceParticipant,
+  VoiceRequest,
+} from "../shared/types";
 import { AccountAvatar } from "./AccountAvatar";
 
 interface RemoteAudioStream {
@@ -41,9 +47,13 @@ function getJoinLabel(title: string, isJoined: boolean): string {
   return isJoined ? `离开${title}` : `加入${title}`;
 }
 
-function describeVoiceNotice(role: RoomRole, currentChannel: VoiceChannel, canSpeakNow: boolean): string {
+function describeVoiceNotice(
+  role: RoomRole,
+  currentChannel: VoiceChannel,
+  canSpeakNow: boolean,
+): string {
   if (role === "viewer" && currentChannel === "audience") {
-    return "观众默认进入观众语音频道。你也可以申请加入公共频道，等待主持人批准。";
+    return "观众默认进入观众语音频道。也可以申请加入公共频道，等待主持人批准。";
   }
 
   if (role === "viewer" && currentChannel === "public") {
@@ -51,18 +61,14 @@ function describeVoiceNotice(role: RoomRole, currentChannel: VoiceChannel, canSp
   }
 
   if (role === "host") {
-    return "主持人可以长期待在公共语音里，并且不受棋钟计时限制。";
+    return "主持人可以长期待在公共语音里，且不受棋钟计时限制。";
   }
 
   if (!canSpeakNow) {
-    return "当前不是你方计时阶段，你可以旁听，但麦克风会保持静音。";
+    return "当前不是你方计时阶段，你可以旁听，麦克风保持静音。";
   }
 
-  return "现在轮到你方发言，你可以在公共语音中打开麦克风。";
-}
-
-function describeParticipantStatus(participant: VoiceParticipant): string {
-  return participant.muted ? "已静音" : "开麦中";
+  return "现在轮到你方发言，可以在公共语音中打开麦克风。";
 }
 
 function RemoteAudio({ stream }: { stream: MediaStream }) {
@@ -76,13 +82,14 @@ function RemoteAudio({ stream }: { stream: MediaStream }) {
 
     audio.srcObject = stream;
     void audio.play().catch(() => {
-      // Some browsers require another user gesture before playback.
+      // 部分浏览器需要用户手势后才允许播放
     });
   }, [stream]);
 
   return <audio autoPlay playsInline ref={audioRef} />;
 }
 
+/** 语音状态：成员列表用状态点表达"开麦中 / 已静音"。 */
 export function VoicePanel({
   account,
   role,
@@ -107,136 +114,137 @@ export function VoicePanel({
   const canViewerRequestPublic = role === "viewer" && isJoined && currentChannel === "audience";
 
   return (
-    <section className="card voice-panel">
-      <div className="card__header">
-        <div>
-          <span className="card__eyebrow">实时语音</span>
-          <h2>{title}</h2>
-        </div>
-        <span className="pill">{isJoined ? "已加入" : "未加入"}</span>
+    <section className="voice-panel">
+      <div className="voice-panel__head">
+        <span className="u-label">Voice</span>
+        <span className="voice-panel__title">{title}</span>
+        <span className={`pill ${isJoined ? "pill--live" : "pill--plain"}`}>
+          {isJoined && <span className="dot dot--live" />}
+          {isJoined ? "已加入" : "未加入"}
+        </span>
       </div>
 
-      <p className="voice-panel__intro">{describeVoiceNotice(role, currentChannel, canSpeakNow)}</p>
+      <div className="voice-panel__body">
+        <p className="voice-panel__note">{describeVoiceNotice(role, currentChannel, canSpeakNow)}</p>
 
-      <div className="account-inline">
         {account ? (
-          <>
+          <div className="voice-panel__identity">
             <AccountAvatar
               displayName={account.displayName}
               avatarUrl={account.avatarUrl}
-              className="account-avatar--small"
+              className="avatar avatar--sm"
             />
-            <div>
-              <strong>{account.displayName}</strong>
-              <span>进入语音时会自动使用当前账户名称</span>
-            </div>
-          </>
+            <span>{account.displayName}</span>
+            <span className="dim">进入语音时会使用当前账号名称</span>
+          </div>
         ) : (
-          <p className="empty-state">先在顶部注册账户，再加入语音频道。</p>
+          <p className="dim">登录后才能加入语音频道。</p>
         )}
-      </div>
 
-      <div className="voice-panel__actions">
-        <button
-          type="button"
-          className="button"
-          disabled={joining || !account}
-          onClick={() => {
-            void (isJoined ? onLeaveVoice() : onJoinVoice());
-          }}
-        >
-          {joining ? "处理中..." : getJoinLabel(title, isJoined)}
-        </button>
-
-        <button
-          type="button"
-          className="button button--ghost"
-          disabled={!isJoined || joining || !canSpeakNow}
-          onClick={() => {
-            void onToggleMute();
-          }}
-        >
-          {isMuted ? "打开麦克风" : "静音麦克风"}
-        </button>
-      </div>
-
-      {canViewerRequestPublic && (
         <div className="voice-panel__actions">
           <button
             type="button"
-            className="button button--ghost"
-            disabled={joining || hasPendingPublicRequest || !account}
+            className={isJoined ? "btn btn--ghost" : "btn btn--live"}
+            disabled={joining || !account}
             onClick={() => {
-              void onRequestPublicVoice();
+              void (isJoined ? onLeaveVoice() : onJoinVoice());
             }}
           >
-            {hasPendingPublicRequest ? "等待主持人同意" : "申请加入公共频道"}
+            {joining ? "处理中…" : getJoinLabel(title, isJoined)}
           </button>
+
+          <button
+            type="button"
+            className="btn btn--ghost"
+            disabled={!isJoined || joining || !canSpeakNow}
+            onClick={() => {
+              void onToggleMute();
+            }}
+          >
+            {isMuted ? "打开麦克风" : "静音麦克风"}
+          </button>
+
+          {canViewerRequestPublic && (
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={joining || hasPendingPublicRequest || !account}
+              onClick={() => {
+                void onRequestPublicVoice();
+              }}
+            >
+              {hasPendingPublicRequest ? "等待主持人同意" : "申请加入公共频道"}
+            </button>
+          )}
         </div>
-      )}
 
-      {role === "host" && publicRequests.length > 0 && (
-        <section className="voice-box">
-          <div className="voice-box__header">
-            <strong>公共频道申请</strong>
-            <span>{publicRequests.length} 人</span>
-          </div>
-          <div className="voice-box__list">
-            {publicRequests.map((request) => (
-              <article className="voice-member" key={request.clientId}>
-                <strong>{request.nickname}</strong>
-                <button
-                  type="button"
-                  className="button button--ghost"
-                  disabled={joining}
-                  onClick={() => {
-                    void onApprovePublicVoice?.(request.clientId);
-                  }}
-                >
-                  同意加入公共频道
-                </button>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
+        {error && <p className="feedback feedback--error">{error}</p>}
 
-      {error && <p className="feedback feedback--error">{error}</p>}
-
-      <div className="voice-panel__grid">
-        <section className="voice-box">
-          <div className="voice-box__header">
-            <strong>{title}成员</strong>
-            <span>{participants.length} 人</span>
+        {role === "host" && publicRequests.length > 0 && (
+          <div className="voice-block">
+            <div className="voice-block__head">
+              <span className="u-label">上麦申请</span>
+              <span className="pill pill--warn">{publicRequests.length} 人</span>
+            </div>
+            <ul className="voice-members">
+              {publicRequests.map((request) => (
+                <li className="voice-member" key={request.clientId}>
+                  <span className="voice-member__name">{request.nickname}</span>
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    disabled={joining}
+                    onClick={() => {
+                      void onApprovePublicVoice?.(request.clientId);
+                    }}
+                  >
+                    同意上麦
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
-          <div className="voice-box__list">
+        )}
+
+        <div className="voice-block">
+          <div className="voice-block__head">
+            <span className="u-label">{title}成员</span>
+            <span className="pill pill--plain">{participants.length} 人</span>
+          </div>
+          <ul className="voice-members">
             {participants.map((participant) => (
-              <article className="voice-member" key={participant.clientId}>
-                <strong>
-                  {participant.nickname} · {describeRole(participant.role)}
-                </strong>
-                <span>{describeParticipantStatus(participant)}</span>
-              </article>
+              <li className="voice-member" key={participant.clientId}>
+                <span className="voice-member__name">
+                  {participant.nickname}
+                  <span className="dim"> · {describeRole(participant.role)}</span>
+                </span>
+                <span className={`pill ${participant.muted ? "pill--plain" : "pill--live"}`}>
+                  {!participant.muted && <span className="dot dot--speaking" />}
+                  {participant.muted ? "已静音" : "开麦中"}
+                </span>
+              </li>
             ))}
-            {participants.length === 0 && <p className="empty-state">还没有人加入这个语音频道。</p>}
-          </div>
-        </section>
+            {participants.length === 0 && <li className="empty">还没有人加入这个语音频道。</li>}
+          </ul>
+        </div>
 
-        <section className="voice-box">
-          <div className="voice-box__header">
-            <strong>当前能听到的成员</strong>
-            <span>{connectedStreams.length} 人</span>
+        <div className="voice-block">
+          <div className="voice-block__head">
+            <span className="u-label">已接通</span>
+            <span className="pill pill--plain">{connectedStreams.length} 人</span>
           </div>
-          <div className="voice-box__list">
+          <ul className="voice-members">
             {connectedStreams.map((stream) => (
-              <article className="voice-member" key={stream.clientId}>
-                <strong>{stream.label}</strong>
-                <span>音频已接通</span>
-              </article>
+              <li className="voice-member" key={stream.clientId}>
+                <span className="voice-member__name">{stream.label}</span>
+                <span className="pill pill--live">音频已接通</span>
+              </li>
             ))}
-            {connectedStreams.length === 0 && <p className="empty-state">加入语音后，这里会显示已经接通的其他成员。</p>}
-          </div>
-        </section>
+            {connectedStreams.length === 0 && (
+              <li className="empty">加入语音后，这里会显示已经接通的其他成员。</li>
+            )}
+          </ul>
+        </div>
       </div>
 
       {remoteStreams.map((stream) => (

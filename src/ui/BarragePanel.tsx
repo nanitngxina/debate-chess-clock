@@ -12,6 +12,7 @@ interface BarragePanelProps {
   onSend: (nickname: string, content: string) => Promise<void>;
 }
 
+/** 实时弹幕：LIVE CHAT。列表自动滚到底，Enter 发送、Shift+Enter 换行。 */
 export function BarragePanel({
   account,
   role,
@@ -57,59 +58,60 @@ export function BarragePanel({
   };
 
   return (
-    <section className="card barrage-panel">
-      <div className="card__header">
-        <div>
-          <span className="card__eyebrow">实时互动</span>
-          <h3>弹幕区</h3>
-        </div>
-        <span className="pill">{describeRole(role)}</span>
+    <section className="chat-panel">
+      <div className="chat-panel__head">
+        <span className="u-label">Live chat</span>
+        <span className="pill pill--plain">{describeRole(role)}</span>
       </div>
 
-      <div className="account-inline">
+      <div className="chat-panel__identity">
         {account ? (
           <>
             <AccountAvatar
               displayName={account.displayName}
               avatarUrl={account.avatarUrl}
-              className="account-avatar--small"
+              className="avatar avatar--sm"
             />
-            <div>
-              <strong>{account.displayName}</strong>
-              <span>将以当前账户身份发送弹幕</span>
-            </div>
+            <span className="chat-panel__identity-name">{account.displayName}</span>
+            <span className="dim">以当前账号发言</span>
           </>
         ) : (
-          <p className="empty-state">先在顶部注册账户，再发送弹幕。</p>
+          <span className="dim">登录后才能发送弹幕</span>
         )}
       </div>
 
-      <div className="barrage-list" ref={listRef}>
+      <div className="chat-list" ref={listRef}>
         {items.map((item) => (
-          <article className="barrage-item" key={item.id}>
-            <div className="barrage-item__meta">
+          <article className="chat-item" key={item.id}>
+            <div className="chat-item__meta">
               <strong>{item.nickname}</strong>
-              <span>{describeRole(item.role)}</span>
-              <time>{formatDateTime(item.createdAt)}</time>
+              <span className="dim">{describeRole(item.role)}</span>
+              <time className="dim nowrap">{formatDateTime(item.createdAt)}</time>
             </div>
-            <p>{item.content}</p>
+            <p className="chat-item__text">{item.content}</p>
           </article>
         ))}
 
-        {items.length === 0 && <p className="empty-state">还没有弹幕，先来一句热场吧。</p>}
+        {items.length === 0 && <p className="empty">还没有弹幕，先来一句热场。</p>}
       </div>
 
-      <form className="barrage-form" onSubmit={handleSubmit} ref={formRef}>
+      <form className="chat-panel__form" onSubmit={handleSubmit} ref={formRef}>
         <textarea
+          className="textarea chat-panel__input"
           maxLength={120}
+          rows={2}
           value={content}
           disabled={disabled || !account}
           placeholder="发一条弹幕，房间内所有人会实时看到"
           onChange={(event) => setContent(event.target.value)}
           onKeyDown={handleTextareaKeyDown}
         />
-        <button type="submit" className="button" disabled={disabled || sending || !account}>
-          {sending ? "发送中..." : "发送弹幕"}
+        <button
+          type="submit"
+          className="btn btn--primary"
+          disabled={disabled || sending || !account}
+        >
+          {sending ? "发送中…" : "发送"}
         </button>
       </form>
     </section>
