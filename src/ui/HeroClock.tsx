@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useBeijingTime } from "../hooks/useBeijingTime";
 import { usePrefersReducedMotion } from "../hooks/usePrefersReducedMotion";
 import { formatDurationFromMs } from "../lib/format";
@@ -11,6 +11,11 @@ const MAX_ROUNDS = 6;
 const ROUND_BONUS_MS = 30 * 1000;
 const BANNER_MS = 1800;
 
+const SIDE_META = {
+  aff: { label: "正方", name: "立论" },
+  neg: { label: "反方", name: "驳论" },
+} as const;
+
 interface DemoState {
   affMs: number;
   negMs: number;
@@ -22,9 +27,8 @@ interface DemoState {
 
 /**
  * 演示起始状态刻意设成"一方正常、另一方已经只剩 24 秒"：
- * 访问者一进页面就能同时看到正常态和警戒态，不用等。
- * 起始时间也偏短，几十秒内就能走完一次「警戒 → 危急 → 回合结束 → 加时 → 换边」，
- * 让人直观感到"时间在压过来"。
+ * 一进页面就能同时看到正常态和告警态，不用等。
+ * 起始时间也偏短，一分钟内能走完一次「告警 → 危急 → 回合结束 → 加时 → 换边」。
  */
 const INITIAL_STATE: DemoState = {
   affMs: 72_310,
@@ -39,14 +43,20 @@ function roundLabel(round: number): string {
   return `Round ${String(round).padStart(2, "0")} / ${String(MAX_ROUNDS).padStart(2, "0")}`;
 }
 
+interface HeroClockProps {
+  /** 左上角品牌角标 */
+  brand?: ReactNode;
+  /** 底部条右侧的插槽（放操作按钮） */
+  foot?: ReactNode;
+}
+
 /**
- * 首页 Hero 的演示棋钟。
+ * 首页的赛事主画面棋钟。
  *
  * 它真的在走 —— 这是让人第一眼产生"比赛正在进行"的关键。
- * 但它是本地模拟，不连接任何房间；系统开启"减少动态效果"时保持静止。
- * 一方走完会 +30s 加时、切换发言方、回合数 +1，走满 6 回合后重置。
+ * 本地模拟，不连接任何房间；系统开启"减少动态效果"时保持静止。
  */
-export function HeroClock() {
+export function HeroClock({ brand, foot }: HeroClockProps) {
   const reducedMotion = usePrefersReducedMotion();
   const beijingTime = useBeijingTime();
   const [state, setState] = useState<DemoState>(INITIAL_STATE);
@@ -102,20 +112,30 @@ export function HeroClock() {
     return () => clearTimeout(id);
   }, [state.banner]);
 
+  const activeMeta = SIDE_META[state.active];
+
   return (
     <TimerLab
       variant="hero"
       isLive
+      brand={brand}
       phaseLabel="自由辩论"
       roundLabel={roundLabel(state.round)}
+      speaker={
+        <span className="timer-lab__speaker">
+          <span className="u-label">Current speaker</span>
+          <strong>{activeMeta.label}</strong>
+        </span>
+      }
       statusExtra={<span className="timer-lab__clock">北京时间 {beijingTime}</span>}
       totalLabel={formatDurationFromMs(state.totalMs)}
+      foot={foot}
       banner={state.banner}
       sides={[
         {
           tone: "aff",
-          label: "正方",
-          name: "立论",
+          label: SIDE_META.aff.label,
+          name: SIDE_META.aff.name,
           remainingMs: state.affMs,
           totalMs: SIDE_BASE_MS,
           active: state.active === "aff",
@@ -123,8 +143,8 @@ export function HeroClock() {
         },
         {
           tone: "neg",
-          label: "反方",
-          name: "驳论",
+          label: SIDE_META.neg.label,
+          name: SIDE_META.neg.name,
           remainingMs: state.negMs,
           totalMs: SIDE_BASE_MS,
           active: state.active === "neg",

@@ -72,13 +72,21 @@ const cases: Case[] = [
     render: () =>
       renderToString(createElement(MarketingPage, { onNavigate: noop, onJoinRoom: noop })),
     expect: [
+      // 品牌识别
       "八角笼",
-      "让每一场辩论",
-      "拥有一个共同的时间",
-      "主持人 · 正方 · 反方 · 观众",
-      "实时同步",
+      // 转播信息层：LIVE / ROUND / CURRENT SPEAKER / TOTAL TIME
+      "Live",
+      "Round 03 / 06",
+      "Current speaker",
+      "Total time",
+      "自由辩论",
+      // 两个计时器的读数
+      "正方",
+      "反方",
+      // 操作入口（在转播框底部条里）
       "创建比赛",
       "进入房间",
+      // 下方两节说明仍在
       "四种身份",
       "不同的入口，相同的时间",
       "双轨倒计时",

@@ -260,6 +260,30 @@
   color: var(--text-dim);
 }
 
+/* 实心标签：用于"时间不足"这类需要跳出来的状态。
+   刻意用阵营本色而不是橙色 —— 整幅画面只保留冷蓝与鲜红。 */
+.pill--solid-aff {
+  border-color: var(--affirmative);
+  background: var(--affirmative);
+  color: #06121f;
+  font-weight: 600;
+}
+
+.pill--solid-neg {
+  border-color: var(--negative);
+  background: var(--negative);
+  color: #1b0404;
+  font-weight: 600;
+}
+
+/* 危急：白字红底，比实心阵营色再重一档 */
+.pill--critical {
+  border-color: var(--negative);
+  background: var(--negative);
+  color: #ffffff;
+  font-weight: 600;
+}
+
 /* 状态圆点：计时中 / LIVE */
 .dot {
   width: 6px;

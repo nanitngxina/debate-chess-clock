@@ -1,9 +1,8 @@
 /* ===========================================================================
    首页 Landing
    ---------------------------------------------------------------------------
-   结构：Hero（文案 + 通栏实时棋钟）→ 四种身份 → 一个时钟。
-   棋钟通栏铺满整幅宽度 —— 两侧的巨大计时数字需要这么宽才放得下，
-   这也是"时间是第一视觉焦点"这个设计目标的落地方式。
+   Hero = 赛事转播主画面：只有正方计时器、反方计时器、比赛状态三样东西。
+   产品说明文字全部移到下方两节（四种身份 / 一个时钟）。
    =========================================================================== */
 
 .landing {
@@ -11,22 +10,24 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Hero
+   Hero：通栏转播主画面
    --------------------------------------------------------------------------- */
 
 .hero {
   position: relative;
   overflow: hidden;
-  padding-block: var(--sp-8) var(--sp-7);
+  padding-block: var(--sp-6) var(--sp-7);
   border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #0b0b0d 0%, var(--bg) 100%);
 }
 
+/* 舞台轮廓：压得很低，绝对不能抢走棋钟 */
 .hero__backdrop {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.85;
+  opacity: 0.4;
 }
 
 .arena-backdrop {
@@ -35,105 +36,46 @@
   display: block;
 }
 
-/*
- * 两列：左文案 / 右按钮；棋钟与底部信息横跨两列。
- * 用 grid-column 1 / -1 让棋钟吃满整行宽度，这是关键。
- */
-.hero__inner {
+.hero__frame-wrap {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--sp-6) var(--sp-8);
-  align-items: end;
+  max-width: var(--hero-max);
 }
 
-.hero__intro {
-  grid-column: 1;
-  min-width: 0;
-}
-
-.hero__aside {
-  grid-column: 2;
-  display: grid;
-  gap: var(--sp-3);
-  justify-items: end;
-  align-content: end;
-}
-
-.hero__clock {
-  grid-column: 1 / -1;
-  min-width: 0;
-}
-
-.hero__meta {
-  grid-column: 1 / -1;
-  display: flex;
+/* 左上角品牌角标（转播画面的台标位） */
+.hero__bug {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3) var(--sp-6);
-  flex-wrap: wrap;
-  font-size: var(--fs-xs);
-}
-
-.hero__title {
-  margin-top: var(--sp-4);
-  font-size: var(--fs-hero);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.02;
-}
-
-.hero__lead {
-  margin-top: var(--sp-4);
-  font-size: clamp(1.125rem, 1.7vw, 1.5rem);
-  font-weight: 400;
-  line-height: 1.5;
-  color: var(--text);
-  max-width: 26ch;
-}
-
-.hero__roles {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  letter-spacing: 0.16em;
-  color: var(--text-dim);
-}
-
-/* 四个能力点：用细分隔线串联，不做成标签堆 */
-.hero__facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2) var(--sp-5);
-}
-
-.hero__facts li {
-  position: relative;
-  font-size: var(--fs-sm);
+  gap: var(--sp-2);
+  padding-right: var(--sp-3);
+  margin-right: var(--sp-1);
+  border-right: 1px solid var(--border);
   color: var(--text-muted);
 }
 
-.hero__facts li + li::before {
-  content: "";
-  position: absolute;
-  left: calc(var(--sp-5) / -2);
-  top: 50%;
-  width: 1px;
-  height: 12px;
-  transform: translateY(-50%);
-  background: var(--border-strong);
+.hero__bug-name {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text);
 }
 
-.hero__actions {
+.hero__stage-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-3);
+  gap: var(--sp-2);
+}
+
+.hero__join-bar {
+  position: relative;
+  z-index: 1;
+  margin-top: var(--sp-4);
 }
 
 .hero__join {
   display: flex;
   gap: var(--sp-2);
-  width: min(540px, 100%);
+  max-width: 560px;
 }
 
 .hero__join .input {
@@ -248,32 +190,12 @@
 }
 
 /* ---------------------------------------------------------------------------
-   响应式：真机重排，不是把桌面压缩
+   响应式
    --------------------------------------------------------------------------- */
 
 @media (max-width: 900px) {
   .hero {
-    padding-block: var(--sp-7) var(--sp-6);
-  }
-
-  .hero__inner {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--sp-5);
-  }
-
-  .hero__intro,
-  .hero__aside,
-  .hero__clock,
-  .hero__meta {
-    grid-column: 1;
-  }
-
-  .hero__aside {
-    justify-items: start;
-  }
-
-  .hero__lead {
-    max-width: 30ch;
+    padding-block: var(--sp-5) var(--sp-6);
   }
 
   .pillar-grid {
@@ -316,29 +238,16 @@
 }
 
 @media (max-width: 620px) {
-  .hero__meta {
-    display: grid;
-    gap: var(--sp-3);
-  }
-
-  .hero__facts {
-    gap: var(--sp-2) var(--sp-4);
-  }
-
-  .hero__facts li + li::before {
-    left: calc(var(--sp-4) / -2);
-  }
-
-  .hero__actions {
+  .hero__stage-actions {
     width: 100%;
   }
 
-  .hero__actions .btn {
+  .hero__stage-actions .btn {
     flex: 1 1 100%;
   }
 
   .hero__join {
-    width: 100%;
+    max-width: 100%;
   }
 
   .pillar-grid {

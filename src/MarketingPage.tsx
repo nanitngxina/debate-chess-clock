@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { ArenaBackdrop } from "./ui/ArenaBackdrop";
+import { BrandMark } from "./ui/BrandMark";
 import { HeroClock } from "./ui/HeroClock";
 import {
   IconAudience,
@@ -108,79 +109,75 @@ export function MarketingPage({ onNavigate, onJoinRoom }: MarketingPageProps) {
   return (
     <div className="landing">
       {/* ---------------------------------------------------------------- */}
+      {/*
+        Hero = 赛事转播主画面。
+        只保留三样东西：正方计时器、反方计时器、比赛状态。
+        产品说明文字全部移除（下方「四种身份 / 一个时钟」两节承担说明职责）。
+      */}
       <section className="hero">
+        {/* 视觉上不显示，但页面需要一个 h1（品牌识别在顶部导航里） */}
+        <h1 className="visually-hidden">八角笼 DEBATE ARENA · 在线辩论赛实时计时平台</h1>
+
         <div className="hero__backdrop" aria-hidden="true">
           <ArenaBackdrop />
         </div>
 
-        <div className="container hero__inner">
-          <div className="hero__intro">
-            <span className="u-label">Online Debate Timer</span>
-            <h1 className="hero__title">八角笼</h1>
-            <p className="hero__lead">
-              让每一场辩论
-              <br />
-              拥有一个共同的时间。
-            </p>
-          </div>
-
-          <div className="hero__aside">
-            <div className="hero__actions">
-              <button
-                type="button"
-                className="btn btn--primary btn--lg"
-                onClick={() => onNavigate("/dashboard")}
-              >
-                创建比赛
-              </button>
-              <button
-                type="button"
-                className="btn btn--ghost btn--lg"
-                aria-expanded={joinOpen}
-                onClick={() => {
-                  setJoinOpen((value) => !value);
-                  setJoinError(null);
-                }}
-              >
-                进入房间
-              </button>
-            </div>
-
-            {joinOpen && (
-              <form className="hero__join" onSubmit={handleJoin}>
-                <input
-                  className="input"
-                  type="text"
-                  value={joinValue}
-                  placeholder="粘贴主持人发给你的房间链接"
-                  aria-label="房间链接"
-                  onChange={(event) => setJoinValue(event.target.value)}
-                />
-                <button type="submit" className="btn">
-                  进入
+        <div className="container hero__frame-wrap">
+          <HeroClock
+            brand={
+              <span className="hero__bug">
+                <BrandMark size={16} />
+                <span className="hero__bug-name">八角笼</span>
+              </span>
+            }
+            foot={
+              <div className="hero__stage-actions">
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => onNavigate("/dashboard")}
+                >
+                  创建比赛
                 </button>
-              </form>
-            )}
-
-            {joinError && <p className="feedback feedback--error">{joinError}</p>}
-          </div>
-
-          {/* 棋钟通栏铺满：只有这么宽，两侧的巨大数字才放得下、不会互相挤压 */}
-          <div className="hero__clock">
-            <HeroClock />
-          </div>
-
-          <div className="hero__meta">
-            <p className="hero__roles">主持人 · 正方 · 反方 · 观众</p>
-            <ul className="hero__facts">
-              <li>实时同步</li>
-              <li>多端可用</li>
-              <li>语音互动</li>
-              <li>弹幕交流</li>
-            </ul>
-            <span className="dim">房间内所有设备看到的是同一个时间 · 上方为实时演示</span>
-          </div>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  aria-expanded={joinOpen}
+                  onClick={() => {
+                    setJoinOpen((value) => !value);
+                    setJoinError(null);
+                  }}
+                >
+                  进入房间
+                </button>
+              </div>
+            }
+          />
         </div>
+
+        {joinOpen && (
+          <div className="container hero__join-bar">
+            <form className="hero__join" onSubmit={handleJoin}>
+              <input
+                className="input"
+                type="text"
+                value={joinValue}
+                placeholder="粘贴主持人发给你的房间链接"
+                aria-label="房间链接"
+                onChange={(event) => setJoinValue(event.target.value)}
+              />
+              <button type="submit" className="btn">
+                进入
+              </button>
+            </form>
+          </div>
+        )}
+
+        {joinError && (
+          <div className="container hero__join-bar">
+            <p className="feedback feedback--error">{joinError}</p>
+          </div>
+        )}
       </section>
 
       {/* ---------------------------------------------------------------- */}

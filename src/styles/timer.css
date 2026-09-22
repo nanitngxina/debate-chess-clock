@@ -165,20 +165,38 @@
 }
 
 /* ---------------------------------------------------------------------------
-   紧迫状态：最后 30 秒转琥珀、最后 10 秒转红并开始呼吸
+   紧迫状态
+   ---------------------------------------------------------------------------
+   刻意不用橙色：告警用"本方的颜色"（正蓝 / 反红），危急才转红。
+   这样整块画面上永远只有冷蓝与鲜红两种阵营色 + 一个通用危险红。
    --------------------------------------------------------------------------- */
 
+/* 告警：数字转本方色、进度条拉满并加粗、顶部色线加粗 */
 .side--urgent .side__digits {
-  color: var(--warn);
+  color: var(--side);
+}
+
+.side--urgent .side__bar {
+  height: 4px;
 }
 
 .side--urgent .side__bar-fill {
-  background: var(--warn);
+  background: var(--side);
   opacity: 1;
 }
 
+/* 危急：数字转红 + 底色轻微泛红 + 呼吸加快 */
+.side--critical {
+  background: var(--negative-soft);
+  box-shadow: inset 0 3px 0 0 var(--negative);
+}
+
 .side--critical .side__digits {
-  color: var(--negative);
+  color: #ff5a5a;
+}
+
+.side--critical .side__bar {
+  height: 4px;
 }
 
 .side--critical .side__bar-fill {
@@ -186,13 +204,8 @@
   opacity: 1;
 }
 
-/* 顶部身份色线在紧迫时让位给警示色（警戒色比身份更重要） */
 .side--urgent:not(.side--critical) {
-  box-shadow: inset 0 2px 0 0 var(--warn);
-}
-
-.side--critical {
-  box-shadow: inset 0 2px 0 0 var(--negative);
+  box-shadow: inset 0 3px 0 0 var(--side);
 }
 
 .side--urgent:not(.side--critical) .side__digits {
@@ -276,14 +289,47 @@
 
 /* --- 尺寸变体 --------------------------------------------------------- */
 
-/* 首页 Hero：独占一整条，数字最大 */
+/* 状态条右侧：当前发言方 */
+.timer-lab__speaker {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+
+.timer-lab__speaker strong {
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-style: normal;
+  letter-spacing: 0;
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------------------
+   首页 Hero：赛事转播主画面
+   ---------------------------------------------------------------------------
+   直角、细边、无水印式装饰 —— 像转播画面的机位框，而不是一张卡片。
+   --------------------------------------------------------------------------- */
+
+.timer-lab--hero {
+  border-radius: 0;
+  background: rgba(10, 10, 12, 0.62);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
 .timer-lab--hero .side__digits {
   font-size: 4rem;
-  font-size: clamp(2.5rem, 16cqw, 6.75rem);
+  /* 通栏宽度下数字可以更大；17cqw 仍然只占列宽 ~82%，不会溢出 */
+  font-size: clamp(3rem, 17cqw, 9rem);
 }
 
 .timer-lab--hero .side {
   padding: var(--sp-6) var(--sp-6) var(--sp-5);
+}
+
+.timer-lab--hero .timer-lab__status,
+.timer-lab--hero .timer-lab__foot {
+  background: rgba(8, 8, 10, 0.5);
 }
 
 /* 房间页：在信息较多的环境里略小一号 */

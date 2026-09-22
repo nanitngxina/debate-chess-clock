@@ -25,6 +25,8 @@ export interface TimerSideView {
 export interface TimerLabProps {
   variant?: "hero" | "room" | "solo";
   isLive?: boolean;
+  /** 左上角的品牌识别（赛事转播的角标位） */
+  brand?: ReactNode;
   /** 当前环节，例如"自由辩论" */
   phaseLabel?: string;
   /** ROUND 03 / 06 */
@@ -37,7 +39,9 @@ export interface TimerLabProps {
   totalCaption?: string;
   /** 覆盖底部区域 */
   foot?: ReactNode;
-  /** 状态条右侧的额外信息 */
+  /** 状态条右侧：当前发言方 */
+  speaker?: ReactNode;
+  /** 状态条最右侧：额外信息（例如北京时间） */
   statusExtra?: ReactNode;
   /** 中部横幅，例如 ROUND END / RECONNECTING */
   banner?: string | null;
@@ -61,15 +65,15 @@ export function urgencyFor(remainingMs: number): { urgent: boolean; critical: bo
 
 function statusPillClass(side: TimerSideView): string {
   if (side.done) {
-    return "pill pill--warn";
+    return "pill pill--plain";
   }
 
   if (side.critical) {
-    return "pill pill--neg";
+    return "pill pill--critical";
   }
 
   if (side.urgent) {
-    return "pill pill--warn";
+    return side.tone === "aff" ? "pill pill--solid-aff" : "pill pill--solid-neg";
   }
 
   if (side.active) {
@@ -106,6 +110,7 @@ function statusText(side: TimerSideView): string {
 export function TimerLab({
   variant = "room",
   isLive = true,
+  brand,
   phaseLabel,
   roundLabel,
   elapsedLabel,
@@ -113,12 +118,14 @@ export function TimerLab({
   totalLabel,
   totalCaption = "Total time",
   foot,
+  speaker,
   statusExtra,
   banner,
 }: TimerLabProps) {
   return (
     <div className={`timer-lab timer-lab--${variant}`}>
       <div className="timer-lab__status">
+        {brand}
         <span className={isLive ? "pill pill--live" : "pill"}>
           {isLive && <span className="dot dot--live" />}
           {isLive ? "Live" : "Standby"}
@@ -130,6 +137,7 @@ export function TimerLab({
         <span className="spacer" />
 
         {elapsedLabel && <span>{elapsedLabel}</span>}
+        {speaker}
         {statusExtra}
       </div>
 
