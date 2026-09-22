@@ -10,6 +10,7 @@
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { AboutPage } from "../src/pages/AboutPage";
+import { DashboardPage } from "../src/DashboardPage";
 import { GuidePage } from "../src/pages/GuidePage";
 import { MarketingPage } from "../src/MarketingPage";
 import { AppHeader } from "../src/ui/AppHeader";
@@ -127,6 +128,12 @@ const cases: Case[] = [
     render: () =>
       renderToString(createElement(AuthPanel, { session: fakeSession, initialMode: "register" })),
     expect: ["创建账号", "出场名称", "注册并进入"],
+  },
+  {
+    name: "dashboard-login",
+    // 服务端没有 localStorage，token 读不到 → 应渲染后台口令登录页
+    render: () => renderToString(createElement(DashboardPage, { onOpenRoom: noop })),
+    expect: ["主持人控制台", "后台口令", "登录后台"],
   },
   {
     name: "timer-lab",

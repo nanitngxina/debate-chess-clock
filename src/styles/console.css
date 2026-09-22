@@ -1,0 +1,281 @@
+/* ===========================================================================
+   开房台（主持人控制台）
+   ---------------------------------------------------------------------------
+   不是传统后台：左侧是"操作区"（表单按信息块分组，用分割线而不是卡片堆叠），
+   右侧是"输出区"（分享链接 + 已开房间）。层级靠边框和留白。
+   =========================================================================== */
+
+.console {
+  flex: 1 1 auto;
+  padding-block: var(--sp-7) var(--sp-8);
+}
+
+.console__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  flex-wrap: wrap;
+  padding-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.console__title {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-3xl);
+  font-weight: 600;
+}
+
+.console__note {
+  margin-top: var(--sp-3);
+  max-width: 58ch;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.console__head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.console__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  gap: var(--sp-7);
+  margin-top: var(--sp-6);
+  align-items: start;
+}
+
+.console__side {
+  display: grid;
+  gap: var(--sp-5);
+  position: sticky;
+  top: calc(var(--header-h) + var(--sp-4));
+}
+
+/* ---------------------------------------------------------------------------
+   表单分块
+   --------------------------------------------------------------------------- */
+
+.console-form {
+  display: grid;
+  gap: var(--sp-6);
+}
+
+.fieldset {
+  display: grid;
+  gap: var(--sp-4);
+  min-width: 0;
+  margin: 0;
+  padding: var(--sp-5) 0 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+.fieldset:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.fieldset legend {
+  grid-column: 1 / -1;
+  width: 100%;
+  padding: 0;
+  font-weight: 500;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+.console-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--border);
+}
+
+/* 正方 / 反方的颜色标识，用在字段标签里 */
+.side-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+.side-swatch--aff {
+  background: var(--affirmative);
+}
+
+.side-swatch--neg {
+  background: var(--negative);
+}
+
+/* ---------------------------------------------------------------------------
+   分享链接
+   --------------------------------------------------------------------------- */
+
+.link-stack {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+.link-row {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.link-row + .link-row {
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border-soft);
+}
+
+.link-row__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.link-row__url {
+  display: block;
+  max-width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--panel-inset);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.link-row__actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+/* ---------------------------------------------------------------------------
+   房间列表
+   --------------------------------------------------------------------------- */
+
+.surface__body--flush {
+  padding: 0;
+}
+
+.room-list {
+  display: grid;
+}
+
+.room-item {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.room-item:last-child {
+  border-bottom: none;
+}
+
+.room-item__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.room-item__topic {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-item__meta {
+  display: grid;
+  gap: 2px;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.room-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* ---------------------------------------------------------------------------
+   自动加时规则编辑器
+   --------------------------------------------------------------------------- */
+
+.rules-editor {
+  display: grid;
+  gap: var(--sp-3);
+  justify-items: start;
+}
+
+.rule-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: var(--sp-3);
+  align-items: end;
+  width: 100%;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-inset);
+}
+
+.rule-row__remove {
+  margin-bottom: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+   响应式
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 1080px) {
+  .console__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-6);
+  }
+
+  .console__side {
+    position: static;
+  }
+}
+
+@media (max-width: 720px) {
+  .console {
+    padding-block: var(--sp-6) var(--sp-7);
+  }
+
+  .console__title {
+    font-size: var(--fs-2xl);
+  }
+
+  .field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rule-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .rule-row__remove {
+    grid-column: 2;
+    justify-self: end;
+  }
+}

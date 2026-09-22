@@ -5,6 +5,7 @@ import { usePersistentState } from "./hooks/usePersistentState";
 import { DEFAULT_ROOM_INPUT } from "./shared/defaults";
 import { cloneConfig, minutesToSeconds, secondsToMinutes } from "./shared/engine";
 import { CreateRoomInput, RoomSummary } from "./shared/types";
+import { BrandMark } from "./ui/BrandMark";
 import { LinkStack } from "./ui/LinkStack";
 import { RulesEditor } from "./ui/RulesEditor";
 
@@ -19,10 +20,26 @@ function createDraft(): CreateRoomInput {
   };
 }
 
+function statusPillClass(status: string): string {
+  if (status === "进行中") {
+    return "pill pill--live";
+  }
+
+  if (status === "已暂停") {
+    return "pill pill--warn";
+  }
+
+  return "pill pill--plain";
+}
+
 interface DashboardPageProps {
   onOpenRoom: (url: string) => void;
 }
 
+/**
+ * 开房台：主持人创建比赛房间、分发四类链接、管理已开房间。
+ * 比赛进行中的实时控制不在这里 —— 那在房间页的主持人视图（CONTROL ROOM）。
+ */
 export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
   const [adminToken, setAdminToken] = usePersistentState<string>(ADMIN_TOKEN_KEY, "");
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
@@ -138,227 +155,298 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
   const updateInitialMinutes = (minutes: number) => {
     setDraft((previousDraft) => ({
       ...previousDraft,
-      config: {
-        ...previousDraft.config,
-        initialTimeSeconds: minutesToSeconds(minutes),
-      },
+      config: { ...previousDraft.config, initialTimeSeconds: minutesToSeconds(minutes) },
     }));
   };
 
   const updateTotalMinutes = (minutes: number) => {
     setDraft((previousDraft) => ({
       ...previousDraft,
-      config: {
-        ...previousDraft.config,
-        maxDurationSeconds: minutesToSeconds(minutes),
-      },
+      config: { ...previousDraft.config, maxDurationSeconds: minutesToSeconds(minutes) },
     }));
   };
 
+  /* ---------------------------------------------------------------- 未登录 */
+
   if (!hasSession) {
     return (
-      <main className="page-grid page-grid--single dashboard-shell dashboard-shell--login">
-        <section className="card card--hero">
-          <span className="card__eyebrow">主持人后台</span>
-          <h2>先登录后台，再创建和管理辩论房间。</h2>
-          <p>登录成功后，你可以创建房间、复制四类访问链接，并管理已经创建的房间。</p>
-        </section>
+      <div className="gate">
+        <div className="gate__inner">
+          <div className="gate__brand">
+            <BrandMark size={40} />
+            <h1 className="gate__title">主持人控制台</h1>
+            <p className="gate__note">输入后台口令后，可以创建房间并分发四类链接。</p>
+          </div>
 
-        <section className="card card--editor">
-          <form className="stack-form" onSubmit={handleLogin}>
-            <label>
-              主持人后台口令
+          <form className="auth-card" onSubmit={handleLogin}>
+            <label className="field">
+              <span className="field__label">后台口令</span>
               <input
+                className="input"
                 type="password"
                 value={loginPassword}
-                placeholder="输入部署在 Worker 中的后台密码"
+                placeholder="部署在 Worker 中的后台密码"
+                autoComplete="current-password"
                 onChange={(event) => setLoginPassword(event.target.value)}
               />
             </label>
-            <button type="submit" className="button" disabled={busy === "login"}>
-              {busy === "login" ? "登录中..." : "登录后台"}
+
+            <button type="submit" className="btn btn--primary btn--lg btn--block" disabled={busy === "login"}>
+              {busy === "login" ? "登录中…" : "登录后台"}
             </button>
+
+            {error && <p className="feedback feedback--error">{error}</p>}
           </form>
-          {error && <p className="feedback feedback--error">{error}</p>}
-        </section>
-      </main>
+        </div>
+      </div>
     );
   }
 
+  /* ---------------------------------------------------------------- 已登录 */
+
   return (
-    <main className="page-grid dashboard-shell dashboard-shell--control">
-      <section className="card card--editor">
-        <div className="card__header">
-          <div>
-            <span className="card__eyebrow">开房后台</span>
-            <h2>创建新房间</h2>
-          </div>
-          <button type="button" className="button button--ghost" onClick={() => setAdminToken("")}>
-            退出登录
-          </button>
+    <div className="container console">
+      <header className="console__head">
+        <div>
+          <span className="u-label">Control</span>
+          <h1 className="console__title">开房台</h1>
+          <p className="console__note">
+            创建比赛房间，然后把四条链接发给对应的人。比赛开始后，实时控制在房间页操作。
+          </p>
         </div>
 
-        <form className="stack-form" onSubmit={handleCreate}>
-          <label>
-            辩题
-            <input
-              type="text"
-              value={draft.topic}
-              onChange={(event) => setDraft((previousDraft) => ({ ...previousDraft, topic: event.target.value }))}
-            />
-          </label>
-
-          <label>
-            规则说明
-            <textarea
-              rows={5}
-              value={draft.rulesText}
-              onChange={(event) =>
-                setDraft((previousDraft) => ({ ...previousDraft, rulesText: event.target.value }))
-              }
-            />
-          </label>
-
-          <div className="split-fields">
-            <label>
-              正方名称
-              <input
-                type="text"
-                value={draft.sides.affirmativeName}
-                onChange={(event) =>
-                  setDraft((previousDraft) => ({
-                    ...previousDraft,
-                    sides: { ...previousDraft.sides, affirmativeName: event.target.value },
-                  }))
-                }
-              />
-            </label>
-            <label>
-              反方名称
-              <input
-                type="text"
-                value={draft.sides.negativeName}
-                onChange={(event) =>
-                  setDraft((previousDraft) => ({
-                    ...previousDraft,
-                    sides: { ...previousDraft.sides, negativeName: event.target.value },
-                  }))
-                }
-              />
-            </label>
-          </div>
-
-          <div className="split-fields">
-            <label>
-              每方初始分钟
-              <input
-                type="number"
-                min="0.5"
-                step="0.5"
-                value={secondsToMinutes(draft.config.initialTimeSeconds)}
-                onChange={(event) => updateInitialMinutes(Number(event.target.value) || 0)}
-              />
-            </label>
-            <label>
-              全场总分钟
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={secondsToMinutes(draft.config.maxDurationSeconds)}
-                onChange={(event) => updateTotalMinutes(Number(event.target.value) || 0)}
-              />
-            </label>
-          </div>
-
-          <div>
-            <span className="input-label">自动加时规则</span>
-            <RulesEditor
-              rules={draft.config.bonusRules}
-              onChange={(bonusRules) =>
-                setDraft((previousDraft) => ({
-                  ...previousDraft,
-                  config: { ...previousDraft.config, bonusRules },
-                }))
-              }
-            />
-          </div>
-
-          <button type="submit" className="button" disabled={busy === "create"}>
-            {busy === "create" ? "创建中..." : "创建辩论房间"}
+        <div className="console__head-actions">
+          <span className="pill pill--live">
+            <span className="dot dot--live" />
+            后台已登录
+          </span>
+          <button type="button" className="btn btn--ghost" onClick={() => setAdminToken("")}>
+            退出
           </button>
-        </form>
+        </div>
+      </header>
 
-        {error && <p className="feedback feedback--error">{error}</p>}
-      </section>
+      <div className="console__grid">
+        <section className="console__main">
+          <form className="console-form" onSubmit={handleCreate}>
+            <fieldset className="fieldset">
+              <legend className="u-label">比赛信息</legend>
 
-      <section className="stack-section stack-section--sidebar">
-        <section className="card card--share">
-          <div className="card__header">
-            <div>
-              <span className="card__eyebrow">最新开房</span>
-              <h2>分享链接</h2>
+              <label className="field">
+                <span className="field__label">辩题</span>
+                <input
+                  className="input"
+                  type="text"
+                  value={draft.topic}
+                  onChange={(event) =>
+                    setDraft((previousDraft) => ({ ...previousDraft, topic: event.target.value }))
+                  }
+                />
+              </label>
+
+              <label className="field">
+                <span className="field__label">规则说明</span>
+                <textarea
+                  className="textarea"
+                  rows={4}
+                  value={draft.rulesText}
+                  onChange={(event) =>
+                    setDraft((previousDraft) => ({ ...previousDraft, rulesText: event.target.value }))
+                  }
+                />
+                <span className="field__hint">这段文字会显示在房间页，供辩手和观众查看</span>
+              </label>
+
+              <div className="field-grid">
+                <label className="field">
+                  <span className="field__label">
+                    <span className="side-swatch side-swatch--aff" />
+                    正方名称
+                  </span>
+                  <input
+                    className="input"
+                    type="text"
+                    value={draft.sides.affirmativeName}
+                    onChange={(event) =>
+                      setDraft((previousDraft) => ({
+                        ...previousDraft,
+                        sides: { ...previousDraft.sides, affirmativeName: event.target.value },
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="field">
+                  <span className="field__label">
+                    <span className="side-swatch side-swatch--neg" />
+                    反方名称
+                  </span>
+                  <input
+                    className="input"
+                    type="text"
+                    value={draft.sides.negativeName}
+                    onChange={(event) =>
+                      setDraft((previousDraft) => ({
+                        ...previousDraft,
+                        sides: { ...previousDraft.sides, negativeName: event.target.value },
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset className="fieldset">
+              <legend className="u-label">计时配置</legend>
+
+              <div className="field-grid">
+                <label className="field">
+                  <span className="field__label">每方初始分钟</span>
+                  <input
+                    className="input input--num"
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={secondsToMinutes(draft.config.initialTimeSeconds)}
+                    onChange={(event) => updateInitialMinutes(Number(event.target.value) || 0)}
+                  />
+                </label>
+
+                <label className="field">
+                  <span className="field__label">全场总分钟</span>
+                  <input
+                    className="input input--num"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={secondsToMinutes(draft.config.maxDurationSeconds)}
+                    onChange={(event) => updateTotalMinutes(Number(event.target.value) || 0)}
+                  />
+                  <span className="field__hint">总时长归零时，整场比赛计时停止</span>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset className="fieldset">
+              <legend className="u-label">自动加时规则</legend>
+              <RulesEditor
+                rules={draft.config.bonusRules}
+                onChange={(bonusRules) =>
+                  setDraft((previousDraft) => ({
+                    ...previousDraft,
+                    config: { ...previousDraft.config, bonusRules },
+                  }))
+                }
+              />
+            </fieldset>
+
+            <div className="console-form__actions">
+              <button
+                type="submit"
+                className="btn btn--primary btn--lg"
+                disabled={busy === "create"}
+              >
+                {busy === "create" ? "创建中…" : "创建比赛房间"}
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--lg"
+                disabled={busy === "create"}
+                onClick={() => setDraft(createDraft())}
+              >
+                重置表单
+              </button>
             </div>
-          </div>
 
-          {latestRoom ? (
-            <LinkStack links={latestRoom.links} />
-          ) : (
-            <p className="empty-state">创建房间后，主持人、正方、反方、观众四类链接会显示在这里。</p>
-          )}
+            {error && <p className="feedback feedback--error">{error}</p>}
+          </form>
         </section>
 
-        <section className="card card--history">
-          <div className="card__header">
-            <div>
-              <span className="card__eyebrow">房间列表</span>
-              <h2>已开房间 {rooms.length} 个</h2>
+        <aside className="console__side">
+          <section className="surface">
+            <div className="surface__head">
+              <span className="surface__title">分享链接</span>
+              {latestRoom && <span className="pill pill--plain">{latestRoom.roomId}</span>}
             </div>
-            <button
-              type="button"
-              className="button button--ghost"
-              disabled={busy === "refresh"}
-              onClick={() => void refreshRooms()}
-            >
-              刷新
-            </button>
-          </div>
+            <div className="surface__body">
+              {latestRoom ? (
+                <LinkStack links={latestRoom.links} />
+              ) : (
+                <p className="empty">创建房间后，主持人、正方、反方、观众四类链接会显示在这里。</p>
+              )}
+            </div>
+          </section>
 
-          <div className="room-list">
-            {rooms.map((room) => (
-              <article className="room-list__item" key={room.roomId}>
-                <div className="room-list__meta">
-                  <strong>{room.topic}</strong>
-                  <span>
-                    {room.sides.affirmativeName} vs {room.sides.negativeName}
-                  </span>
-                  <span>
-                    {describeRoomStatus(room)} · 更新于 {formatDateTime(room.updatedAt)}
-                  </span>
-                </div>
-                <div className="room-list__actions">
-                  <button type="button" className="button button--ghost" onClick={() => onOpenRoom(room.links.host)}>
-                    打开主持人页
-                  </button>
-                  <button type="button" className="button button--ghost" onClick={() => onOpenRoom(room.links.viewer)}>
-                    打开观众页
-                  </button>
-                  <button
-                    type="button"
-                    className="button button--ghost"
-                    disabled={deletingRoomId === room.roomId}
-                    onClick={() => void handleDeleteRoom(room)}
-                  >
-                    {deletingRoomId === room.roomId ? "删除中..." : "删除房间"}
-                  </button>
-                </div>
-              </article>
-            ))}
+          <section className="surface">
+            <div className="surface__head">
+              <span className="surface__title">已开房间 · {rooms.length}</span>
+              <button
+                type="button"
+                className="btn btn--quiet btn--sm"
+                disabled={busy === "refresh"}
+                onClick={() => void refreshRooms()}
+              >
+                {busy === "refresh" ? "刷新中…" : "刷新"}
+              </button>
+            </div>
 
-            {rooms.length === 0 && <p className="empty-state">还没有房间，先创建第一场比赛吧。</p>}
-          </div>
-        </section>
-      </section>
-    </main>
+            <div className="surface__body surface__body--flush">
+              {rooms.length === 0 ? (
+                <p className="empty">还没有房间，先创建第一场比赛。</p>
+              ) : (
+                <ul className="room-list">
+                  {rooms.map((room) => (
+                    <li className="room-item" key={room.roomId}>
+                      <div className="room-item__head">
+                        <span className="room-item__topic">{room.topic}</span>
+                        <span className={statusPillClass(describeRoomStatus(room))}>
+                          {describeRoomStatus(room)}
+                        </span>
+                      </div>
+
+                      <div className="room-item__meta">
+                        <span>
+                          {room.sides.affirmativeName}
+                          <span className="dim"> vs </span>
+                          {room.sides.negativeName}
+                        </span>
+                        <span className="dim">
+                          {room.roomId} · {formatDateTime(room.updatedAt)}
+                        </span>
+                      </div>
+
+                      <div className="room-item__actions">
+                        <button
+                          type="button"
+                          className="btn btn--sm"
+                          onClick={() => onOpenRoom(room.links.host)}
+                        >
+                          主持人页
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          onClick={() => onOpenRoom(room.links.viewer)}
+                        >
+                          观众页
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--quiet btn--sm"
+                          disabled={deletingRoomId === room.roomId}
+                          onClick={() => void handleDeleteRoom(room)}
+                        >
+                          {deletingRoomId === room.roomId ? "删除中…" : "删除"}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div>
   );
 }

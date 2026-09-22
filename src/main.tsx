@@ -12,6 +12,7 @@ import "./styles/timer.css";
 import "./styles/editorial.css";
 import "./styles/account.css";
 import "./styles/landing.css";
+import "./styles/console.css";
 import App from "./App";
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
