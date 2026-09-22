@@ -192,7 +192,6 @@ export function AccountPanel({
                 type="text"
                 maxLength={20}
                 value={displayName}
-                placeholder="例如：林修、夜航者、三号观众"
                 onChange={(event) => setDisplayName(event.target.value)}
               />
             </label>
