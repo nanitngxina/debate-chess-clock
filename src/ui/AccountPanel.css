@@ -53,3 +53,61 @@
   text-align: center;
   color: var(--muted);
 }
+
+/* ---------------------------------------------------------------------------
+   弹层模式（.account-panel--modal）的修正
+   ---------------------------------------------------------------------------
+   背景：原来是"面板内部滚动"（max-height + overflow:auto），操作按钮在内容最底部。
+   再加上首页那套超大标题字号（clamp 到 3.6rem）和小屏下单列布局，面板会变得很高，
+   按钮就被挤到可视区外面，看起来像"只有一个关闭能点"。
+
+   修法：
+   1. 改成整个弹层滚动（overlay 自己滚），按钮不会再被"关"在面板内部；
+   2. 操作按钮吸附在可视区底部，任何滚动位置都能直接点到；
+   3. 标题用正常字号，别再撑高。 */
+
+.account-modal {
+  overflow-y: auto;
+  /* grid 居中 + 溢出会把顶部裁掉，改成顶部对齐 */
+  align-items: start;
+  justify-items: center;
+}
+
+.account-panel--modal {
+  max-height: none;
+  margin: 0 auto;
+}
+
+.account-panel--modal .account-panel__hero h2 {
+  font-size: 1.6rem;
+  line-height: 1.2;
+}
+
+.account-panel--modal .account-panel__hero p {
+  margin-top: 8px;
+}
+
+.account-panel--modal .account-panel__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-top: 4px;
+  padding: 14px 0 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(15, 17, 21, 0) 0%,
+    rgba(15, 17, 21, 0.92) 32%,
+    rgba(15, 17, 21, 0.97) 100%
+  );
+}
+
+@media (max-width: 720px) {
+  .account-panel--modal .account-panel__hero h2 {
+    font-size: 1.35rem;
+  }
+
+  .account-modal {
+    padding: 12px;
+  }
+}
+
