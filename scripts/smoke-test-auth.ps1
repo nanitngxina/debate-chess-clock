@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$BaseUrl = 'http://127.0.0.1:8787'
 )
 
@@ -71,6 +71,68 @@ function Call-Api {
       Text   = $text
       Data   = if ($text) { $text | ConvertFrom-Json } else { $null }
     }
+  }
+}
+
+function Call-Upload {
+  param(
+    [string]$Path,
+    [byte[]]$Bytes,
+    [string]$FileName,
+    [string]$ContentType,
+    [string]$Token
+  )
+
+  # PowerShell 5.1 没有 -Form，只能手工拼 multipart 请求体
+  $boundary = [Guid]::NewGuid().ToString()
+  $stream = New-Object System.IO.MemoryStream
+  $head = [System.Text.Encoding]::UTF8.GetBytes(
+    "--$boundary`r`nContent-Disposition: form-data; name=`"file`"; filename=`"$FileName`"`r`nContent-Type: $ContentType`r`n`r`n"
+  )
+  $stream.Write($head, 0, $head.Length)
+  $stream.Write($Bytes, 0, $Bytes.Length)
+  $tail = [System.Text.Encoding]::UTF8.GetBytes("`r`n--$boundary--`r`n")
+  $stream.Write($tail, 0, $tail.Length)
+
+  $headers = @{}
+  if ($Token) { $headers['Authorization'] = "Bearer $Token" }
+
+  try {
+    $resp = Invoke-WebRequest -Uri "$base$Path" -Method POST -Body $stream.ToArray() `
+      -ContentType "multipart/form-data; boundary=$boundary" -Headers $headers -UseBasicParsing
+    $text = Read-ResponseText $resp
+    return [pscustomobject]@{
+      Status = [int]$resp.StatusCode
+      Text   = $text
+      Data   = if ($text) { $text | ConvertFrom-Json } else { $null }
+    }
+  } catch {
+    $r = $_.Exception.Response
+    if (-not $r) { throw }
+    $status = [int]$r.StatusCode
+    $text = $_.ErrorDetails.Message
+    return [pscustomobject]@{
+      Status = $status
+      Text   = $text
+      Data   = if ($text) { $text | ConvertFrom-Json } else { $null }
+    }
+  }
+}
+
+function Get-Raw {
+  param([string]$Path)
+
+  try {
+    $resp = Invoke-WebRequest -Uri "$base$Path" -UseBasicParsing
+    return [pscustomobject]@{
+      Status      = [int]$resp.StatusCode
+      ContentType = [string]$resp.Headers['Content-Type']
+      Length      = [int]$resp.RawContentLength
+    }
+  } catch {
+    $r = $_.Exception.Response
+    if (-not $r) { throw }
+    return [pscustomobject]@{ Status = [int]$r.StatusCode; ContentType = ''; Length = 0 }
   }
 }
 
@@ -223,6 +285,52 @@ Check 'dev outbox readable locally' ($outbox.Status -eq 200) $outbox.Text
 if ($outbox.Status -eq 200) {
   Check 'outbox has our emails' ($outbox.Data.emails.Count -ge 3) ([string]$outbox.Data.emails.Count)
 }
+
+Write-Output "=== 18. avatar upload / serve / cleanup ==="
+$login4 = Call-Api -Method POST -Path '/api/auth/login' -Body @{ email = $email; password = $resetPassword }
+Check 'login for avatar tests' ($login4.Status -eq 200) $login4.Text
+$token4 = $login4.Data.token
+
+# 一张最小的合法 1x1 PNG
+$png = [Convert]::FromBase64String('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==')
+
+$upload = Call-Upload -Path '/api/auth/avatar' -Bytes $png -FileName 'a.png' -ContentType 'image/png' -Token $token4
+Write-Output ("  status={0} body={1}" -f $upload.Status, $upload.Text)
+Check 'avatar upload returns 200' ($upload.Status -eq 200) $upload.Text
+
+$avatarUrl = $upload.Data.avatarUrl
+Check 'avatar stored as a short R2 path' ([bool]($avatarUrl -like '/api/avatars/*')) $avatarUrl
+Check 'avatar url is short, not a data url' ($avatarUrl.Length -lt 200 -and -not ($avatarUrl -like 'data:*')) $avatarUrl
+
+$served = Get-Raw -Path $avatarUrl
+Check 'uploaded avatar is served' ($served.Status -eq 200) ([string]$served.Status)
+Check 'avatar served as image/png' ($served.ContentType -like '*image/png*') $served.ContentType
+
+$saved = Call-Api -Method PATCH -Path '/api/auth/profile' -Token $token4 -Body @{
+  displayName = '头像测试'
+  avatarUrl   = $avatarUrl
+}
+Check 'profile keeps the R2 avatar url' ($saved.Data.account.avatarUrl -eq $avatarUrl) $saved.Text
+Check 'account no longer stores a data url' (-not ($saved.Data.account.avatarUrl -like 'data:*')) $saved.Data.account.avatarUrl
+
+# 伪装成图片的非图片内容必须被拒绝（服务端按文件头判断，不信 Content-Type）
+$fake = [System.Text.Encoding]::UTF8.GetBytes('this is definitely not an image')
+$rejected = Call-Upload -Path '/api/auth/avatar' -Bytes $fake -FileName 'fake.png' -ContentType 'image/png' -Token $token4
+Write-Output ("  status={0} body={1}" -f $rejected.Status, $rejected.Text)
+Check 'non-image rejected by magic bytes' ($rejected.Status -eq 400) $rejected.Text
+
+$anon = Call-Upload -Path '/api/auth/avatar' -Bytes $png -FileName 'a.png' -ContentType 'image/png' -Token ''
+Check 'anonymous upload rejected' ($anon.Status -eq 401) $anon.Text
+
+# 清空头像后，R2 里的旧对象应该被删掉
+$cleared = Call-Api -Method PATCH -Path '/api/auth/profile' -Token $token4 -Body @{
+  displayName = '头像测试'
+  avatarUrl   = ''
+}
+Check 'avatar can be cleared' ($cleared.Status -eq 200 -and $cleared.Data.account.avatarUrl -eq '') $cleared.Text
+
+$gone = Get-Raw -Path $avatarUrl
+Check 'old avatar object deleted after change' ($gone.Status -eq 404) ([string]$gone.Status)
 
 Write-Output ''
 Write-Output ("===== PASS {0} / FAIL {1} =====" -f $script:pass, $script:fail)

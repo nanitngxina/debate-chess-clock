@@ -24,6 +24,13 @@ database_name = "debate-cage-clock-accounts"
 database_id = "local-dev-placeholder"
 migrations_dir = "migrations"
 
+# 头像图片（账号里只存 URL，不存 data URL）
+# 本地开发：wrangler dev --local 自动模拟，不需要创建 bucket
+# 部署前：npx wrangler r2 bucket create debate-cage-clock-avatars
+[[r2_buckets]]
+binding = "AVATARS"
+bucket_name = "debate-cage-clock-avatars"
+
 [[migrations]]
 tag = "v1"
 new_classes = ["RoomDurableObject"]

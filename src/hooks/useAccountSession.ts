@@ -10,6 +10,7 @@ import {
   resendMyVerification,
   resetPassword as resetPasswordRequest,
   updateMyAccount,
+  uploadAvatar as uploadAvatarRequest,
   verifyMyEmail,
 } from "../lib/api";
 import { usePersistentState } from "./usePersistentState";
@@ -170,6 +171,32 @@ export function useAccountSession() {
     [sessionToken],
   );
 
+  /**
+   * 上传头像图片，返回可以直接存进账号的短 URL。
+   * 图片本体存在服务端 R2 里，账号记录里不再有 data URL。
+   */
+  const uploadAvatar = useCallback(
+    async (blob: Blob): Promise<string> => {
+      if (!sessionToken) {
+        throw new Error("当前没有登录的账户");
+      }
+
+      setSaving(true);
+      setError(null);
+
+      try {
+        const response = await uploadAvatarRequest(sessionToken, blob);
+        return response.avatarUrl;
+      } catch (accountError) {
+        setError(describe(accountError, "头像上传失败"));
+        throw accountError;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [sessionToken],
+  );
+
   const changePassword = useCallback(
     async (input: ChangePasswordInput): Promise<void> => {
       if (!sessionToken) {
@@ -277,6 +304,7 @@ export function useAccountSession() {
     login,
     logout,
     updateProfile,
+    uploadAvatar,
     changePassword,
     verifyEmail,
     resendVerification,

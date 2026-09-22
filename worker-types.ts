@@ -7,6 +7,8 @@ export interface WorkerEnv {
   ROOM_DIRECTORY: KVNamespace;
   /** 账号数据库（D1）——账号、会话、验证码、限流、发信记录 */
   DB: D1Database;
+  /** 头像对象存储（R2）——账号里只存 URL，不再存 data URL */
+  AVATARS: R2Bucket;
   HOST_ADMIN_PASSWORD: string;
   ADMIN_SESSION_SECRET: string;
 

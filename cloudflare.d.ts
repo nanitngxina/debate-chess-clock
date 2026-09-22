@@ -85,6 +85,32 @@ interface D1Database {
   exec(query: string): Promise<{ count: number; duration: number }>;
 }
 
+interface R2HttpMetadata {
+  contentType?: string;
+  cacheControl?: string;
+}
+
+interface R2Object {
+  key: string;
+  size: number;
+  httpEtag: string;
+  httpMetadata?: R2HttpMetadata;
+}
+
+interface R2ObjectBody extends R2Object {
+  body: ReadableStream;
+}
+
+interface R2Bucket {
+  put(
+    key: string,
+    value: ArrayBuffer | ArrayBufferView | ReadableStream | string | Blob,
+    options?: { httpMetadata?: R2HttpMetadata },
+  ): Promise<R2Object>;
+  get(key: string): Promise<R2ObjectBody | null>;
+  delete(key: string): Promise<void>;
+}
+
 interface ExportedHandler<Env = unknown> {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Response | Promise<Response>;
 }

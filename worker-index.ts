@@ -35,6 +35,16 @@ import {
   verifyPassword,
 } from "./worker-auth";
 import { buildResetEmail, buildVerifyEmail, deliverEmail, isDevEmailMode } from "./worker-email";
+import {
+  AVATAR_MAX_BYTES,
+  deleteAvatarObject,
+  detectImageMimeType,
+  isOwnAvatarUrl,
+  mimeTypeForObjectKey,
+  parseAvatarObjectKey,
+  readAvatarObject,
+  saveAvatarObject,
+} from "./worker-avatars";
 import { RoomDurableObject } from "./worker-room-object";
 import { RoomBootstrapPayload, WorkerEnv } from "./worker-types";
 
@@ -51,6 +61,8 @@ const RATE_LIMITS = {
   forgotPerIp: { limit: 10, windowMs: 60 * 60 * 1000 },
   forgotPerEmail: { limit: 5, windowMs: 60 * 60 * 1000 },
   resendPerAccount: { limit: 5, windowMs: 60 * 60 * 1000 },
+  /** 头像上传：防止登录用户无限往 R2 灌图片 */
+  avatarPerAccount: { limit: 20, windowMs: 60 * 60 * 1000 },
 } as const;
 
 const worker: ExportedHandler<WorkerEnv> = {
@@ -107,6 +119,16 @@ const worker: ExportedHandler<WorkerEnv> = {
       // --- 仅本地开发：读取开发模式下的发信内容 ---
       if (url.pathname === "/api/dev/outbox" && request.method === "GET") {
         return await handleDevOutbox(request, env);
+      }
+
+      // --- 头像：上传（需登录） ---
+      if (url.pathname === "/api/auth/avatar" && request.method === "POST") {
+        return await handleAvatarUpload(request, env);
+      }
+
+      // --- 头像：读取（公开，图片本体在 R2，账号里只存这个 URL） ---
+      if (url.pathname.startsWith("/api/avatars/") && request.method === "GET") {
+        return await handleAvatarServe(env, url.pathname);
       }
 
       // --- 房间管理（需要后台令牌） ---
@@ -346,15 +368,124 @@ async function handleUpdateProfile(request: Request, env: WorkerEnv): Promise<Re
     return json({ error: "请先填写显示名称" }, 400);
   }
 
-  await updateAccountProfile(
-    env.DB,
-    resolved.account.account_id,
-    displayName,
-    sanitizeAvatarUrl(payload.avatarUrl),
-  );
+  const accountId = resolved.account.account_id;
+  const previousAvatarUrl = resolved.account.avatar_url;
+  const nextAvatarUrl = sanitizeAvatarUrl(payload.avatarUrl);
+
+  await updateAccountProfile(env.DB, accountId, displayName, nextAvatarUrl);
+
+  // 换成别的头像（或清空）之后，把 R2 里那份旧图删掉，避免留下孤儿对象
+  if (
+    previousAvatarUrl &&
+    previousAvatarUrl !== nextAvatarUrl &&
+    isOwnAvatarUrl(previousAvatarUrl, accountId)
+  ) {
+    await deleteAvatarObject(env, previousAvatarUrl);
+  }
 
   const updated = await findAccountByEmail(env.DB, resolved.account.email);
   return json({ account: updated ? toAccountProfile(updated) : null });
+}
+
+/**
+ * 上传头像。
+ *
+ * 只负责把图片存进 R2 并返回它的 URL，**不直接改账号**：
+ * 账号里的 avatar_url 仍然由 PATCH /api/auth/profile 统一保存。
+ * 这样「选了图但没点保存就关掉」不会偷偷改掉账号资料。
+ *
+ * 图片本体不再进 D1，所以账号记录里永远只有几十个字符的短 URL。
+ */
+async function handleAvatarUpload(request: Request, env: WorkerEnv): Promise<Response> {
+  const resolved = await requireAccountSession(request, env);
+  if (resolved instanceof Response) {
+    return resolved;
+  }
+
+  if (!env.AVATARS) {
+    return json({ error: "服务端没有配置头像存储（R2）" }, 503);
+  }
+
+  const verdict = await consumeRateLimit(
+    env.DB,
+    `avatar:${resolved.account.account_id}`,
+    RATE_LIMITS.avatarPerAccount.limit,
+    RATE_LIMITS.avatarPerAccount.windowMs,
+  );
+
+  if (!verdict.allowed) {
+    return tooManyRequests(verdict.retryAfterMs);
+  }
+
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return json({ error: "上传内容格式不正确" }, 400);
+  }
+
+  const uploaded = form.get("file");
+  if (!(uploaded instanceof File)) {
+    return json({ error: "请选择要上传的图片" }, 400);
+  }
+
+  if (uploaded.size === 0) {
+    return json({ error: "图片内容为空" }, 400);
+  }
+
+  if (uploaded.size > AVATAR_MAX_BYTES) {
+    return json(
+      { error: `头像图片不能超过 ${Math.floor(AVATAR_MAX_BYTES / 1024 / 1024)}MB` },
+      400,
+    );
+  }
+
+  const bytes = new Uint8Array(await uploaded.arrayBuffer());
+
+  // 按文件头判断真实类型，不信客户端给的 Content-Type
+  const mimeType = detectImageMimeType(bytes);
+  if (!mimeType) {
+    return json({ error: "只支持 JPEG / PNG / WebP / GIF 格式的图片" }, 400);
+  }
+
+  const avatarUrl = await saveAvatarObject(
+    env,
+    resolved.account.account_id,
+    bytes,
+    mimeType,
+  );
+
+  return json({ avatarUrl });
+}
+
+/** 从 R2 读取头像图片并返回给浏览器 */
+async function handleAvatarServe(env: WorkerEnv, pathname: string): Promise<Response> {
+  if (!env.AVATARS) {
+    return json({ error: "未找到该头像" }, 404);
+  }
+
+  const key = parseAvatarObjectKey(pathname);
+  if (!key) {
+    return json({ error: "未找到该头像" }, 404);
+  }
+
+  const object = await readAvatarObject(env, key);
+  if (!object) {
+    return json({ error: "未找到该头像" }, 404);
+  }
+
+  const headers = new Headers();
+  headers.set(
+    "Content-Type",
+    object.httpMetadata?.contentType ?? mimeTypeForObjectKey(key),
+  );
+  // 对象 key 带时间戳+随机串，内容永不变化，可以长缓存
+  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  if (object.httpEtag) {
+    headers.set("ETag", object.httpEtag);
+  }
+
+  return new Response(object.body, { headers });
 }
 
 async function handleChangePassword(request: Request, env: WorkerEnv): Promise<Response> {

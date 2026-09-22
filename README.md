@@ -22,6 +22,7 @@
 - 修改密码（会自动登出其他设备）
 - 忘记密码 → 邮箱验证码 → 重置
 - 出场档案（名字 + 头像）跟着账号走，换设备也在
+- 头像图片上传后存进 R2，账号里只留短 URL
 - 接口限流，防注册刷号
 - 发信通道可插拔：没配域名时走开发模式，配了自动切真发信
 
@@ -32,6 +33,7 @@
 - 房间实时状态：Cloudflare Durable Object
 - 房间目录：Cloudflare KV
 - **账号数据：Cloudflare D1**（账号 / 会话 / 验证码 / 限流 / 发信记录）
+- **头像图片：Cloudflare R2**（账号里只存短 URL，不存 data URL）
 - 实时同步方式：SSE（Server-Sent Events）+ HTTP 指令写入
 
 账号数据放在 D1 而不是 KV，是因为注册系统需要唯一索引（邮箱唯一）、事务和可吊销的会话记录 —— KV 是最终一致的，做不到这些。
@@ -74,6 +76,7 @@
 │  └─ smoke-test-auth.ps1  # 账号接口端到端冒烟测试
 ├─ worker-index.ts         # Cloudflare Worker 入口（路由 + 账号接口）
 ├─ worker-auth.ts          # 密码哈希 / 会话 / 验证码 / 限流
+├─ worker-avatars.ts       # 头像图片存取（R2，含文件头校验）
 ├─ worker-email.ts         # 发信抽象（Resend / Brevo / 开发模式）
 ├─ worker-room-object.ts   # Durable Object 房间逻辑
 ├─ worker-types.ts         # Worker 环境类型

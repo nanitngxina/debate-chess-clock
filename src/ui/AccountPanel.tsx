@@ -10,6 +10,8 @@ interface AccountPanelProps {
   saving: boolean;
   error: string | null;
   onUpdateProfile: (input: ProfileInput) => Promise<void>;
+  /** 把裁好的头像图片传到服务端（存进 R2），返回可保存的短 URL */
+  onUploadAvatar: (blob: Blob) => Promise<string>;
   onChangePassword: (input: ChangePasswordInput) => Promise<void>;
   onLogout: () => Promise<void>;
   onClose: () => void;
@@ -17,6 +19,7 @@ interface AccountPanelProps {
 
 const CUSTOM_AVATAR_ID = "custom";
 const UPLOAD_AVATAR_ID = "upload";
+const NO_AVATAR_ID = "none";
 const FALLBACK_DISPLAY_NAME = "未命名旅人";
 
 export function AccountPanel({
@@ -24,6 +27,7 @@ export function AccountPanel({
   saving,
   error,
   onUpdateProfile,
+  onUploadAvatar,
   onChangePassword,
   onLogout,
   onClose,
@@ -33,6 +37,8 @@ export function AccountPanel({
   const [avatarChoice, setAvatarChoice] = useState<string>(ACCOUNT_AVATAR_PRESETS[0]?.id ?? CUSTOM_AVATAR_ID);
   const [customAvatarUrl, setCustomAvatarUrl] = useState("");
   const [uploadedAvatarUrl, setUploadedAvatarUrl] = useState("");
+  const [uploadPreviewUrl, setUploadPreviewUrl] = useState("");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
   // 改密码
@@ -47,10 +53,14 @@ export function AccountPanel({
     const nextDisplayName = account.displayName ?? "";
     const nextAvatarUrl = account.avatarUrl ?? "";
     const matchedPreset = findAvatarPresetByUrl(nextAvatarUrl);
-    const isUploadedAvatar = nextAvatarUrl.startsWith("data:image/");
+    // 上传的头像现在是一个 R2 相对地址；
+    // data:image/ 只用于兼容以前存下的历史值（预设 SVG 会先被 matchedPreset 认出来）。
+    const isUploadedAvatar =
+      nextAvatarUrl.startsWith("/api/avatars/") || nextAvatarUrl.startsWith("data:image/");
 
     setDisplayName(nextDisplayName);
     setUploadedAvatarUrl(isUploadedAvatar ? nextAvatarUrl : "");
+    setUploadPreviewUrl("");
     setCustomAvatarUrl(!matchedPreset && !isUploadedAvatar ? nextAvatarUrl : "");
     setAvatarChoice(
       matchedPreset?.id ??
@@ -64,16 +74,21 @@ export function AccountPanel({
   }, [account]);
 
   const resolvedAvatarUrl = useMemo(() => {
+    if (avatarChoice === NO_AVATAR_ID) {
+      return "";
+    }
+
     if (avatarChoice === CUSTOM_AVATAR_ID) {
       return customAvatarUrl.trim();
     }
 
     if (avatarChoice === UPLOAD_AVATAR_ID) {
-      return uploadedAvatarUrl;
+      // 上传完成前先用本地预览图，避免界面闪一下空白
+      return uploadPreviewUrl || uploadedAvatarUrl;
     }
 
     return ACCOUNT_AVATAR_PRESETS.find((preset) => preset.id === avatarChoice)?.avatarUrl ?? "";
-  }, [avatarChoice, customAvatarUrl, uploadedAvatarUrl]);
+  }, [avatarChoice, customAvatarUrl, uploadedAvatarUrl, uploadPreviewUrl]);
 
   const previewName = displayName.trim() || account.displayName || FALLBACK_DISPLAY_NAME;
 
@@ -137,15 +152,23 @@ export function AccountPanel({
     }
 
     setAvatarError(null);
+    setUploadingAvatar(true);
+
     void prepareAvatarUpload(file)
-      .then((nextAvatarUrl) => {
-        setUploadedAvatarUrl(nextAvatarUrl);
+      .then(async (prepared) => {
+        // 先显示本地预览图，让用户立刻看到裁好的效果
+        setUploadPreviewUrl(prepared.previewUrl);
         setAvatarChoice(UPLOAD_AVATAR_ID);
+
+        // 图片本体传到服务端 R2，只把返回的短 URL 留在账号里
+        const avatarUrl = await onUploadAvatar(prepared.blob);
+        setUploadedAvatarUrl(avatarUrl);
       })
       .catch((uploadError) => {
         setAvatarError(uploadError instanceof Error ? uploadError.message : "头像上传失败");
       })
       .finally(() => {
+        setUploadingAvatar(false);
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
@@ -192,7 +215,7 @@ export function AccountPanel({
                 type="text"
                 maxLength={20}
                 value={displayName}
-                placeholder="例如：林修、夜航者、三号观众"
+                placeholder="例如：菲比啾比,菲八啾比，糯糯"
                 onChange={(event) => setDisplayName(event.target.value)}
               />
             </label>
@@ -230,10 +253,12 @@ export function AccountPanel({
                   className={`avatar-option ${avatarChoice === UPLOAD_AVATAR_ID ? "avatar-option--active" : ""}`}
                   onClick={handleUploadClick}
                 >
-                  {uploadedAvatarUrl ? (
+                  {uploadingAvatar ? (
+                    <span className="account-avatar account-avatar--option account-avatar--custom">…</span>
+                  ) : uploadedAvatarUrl || uploadPreviewUrl ? (
                     <AccountAvatar
                       displayName={previewName}
-                      avatarUrl={uploadedAvatarUrl}
+                      avatarUrl={uploadPreviewUrl || uploadedAvatarUrl}
                       className="account-avatar--option"
                     />
                   ) : (
@@ -252,6 +277,16 @@ export function AccountPanel({
                   <strong>图片链接</strong>
                   <span>备用方式，使用外部图片地址</span>
                 </button>
+
+                <button
+                  type="button"
+                  className={`avatar-option ${avatarChoice === NO_AVATAR_ID ? "avatar-option--active" : ""}`}
+                  onClick={() => setAvatarChoice(NO_AVATAR_ID)}
+                >
+                  <span className="account-avatar account-avatar--option account-avatar--custom">∅</span>
+                  <strong>不使用头像</strong>
+                  <span>只用名字首字母生成头像</span>
+                </button>
               </div>
 
               <input
@@ -262,8 +297,12 @@ export function AccountPanel({
                 onChange={handleAvatarFileChange}
               />
 
-              {avatarChoice === UPLOAD_AVATAR_ID && (
-                <p className="account-panel__upload-tip">已启用本地上传头像。再次点击“上传头像”可以替换图片。</p>
+              {uploadingAvatar && <p className="account-panel__upload-tip">正在上传头像…</p>}
+
+              {!uploadingAvatar && avatarChoice === UPLOAD_AVATAR_ID && (
+                <p className="account-panel__upload-tip">
+                  已启用本地上传头像。再次点击“上传头像”可以替换图片，记得点“保存档案”才会生效。
+                </p>
               )}
 
               {avatarChoice === CUSTOM_AVATAR_ID && (
@@ -284,7 +323,7 @@ export function AccountPanel({
         </div>
 
         <div className="account-panel__actions">
-          <button type="submit" className="button" disabled={saving}>
+          <button type="submit" className="button" disabled={saving || uploadingAvatar}>
             {saving ? "保存中..." : "保存档案"}
           </button>
           <button

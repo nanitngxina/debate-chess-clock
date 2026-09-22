@@ -243,7 +243,7 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
               type="text"
               maxLength={20}
               value={displayName}
-              placeholder="例如：林修、夜航者、三号观众"
+              placeholder="例如：菲比啾比,菲八啾比，糯糯"
               autoComplete="nickname"
               onChange={(event) => setDisplayName(event.target.value)}
             />

@@ -33,6 +33,17 @@ npx wrangler d1 create debate-cage-clock-accounts
 把输出里的 `database_id` 填进 `wrangler.toml` 的 `[[d1_databases]]`，
 替换掉现在的占位值 `local-dev-placeholder`。
 
+### 1.3 创建 R2（头像图片）
+
+```bash
+npx wrangler r2 bucket create debate-cage-clock-avatars
+```
+
+`wrangler.toml` 里的 `[[r2_buckets]]` 已经写好，bucket 名字对得上就行，不需要填 id。
+头像图片只存在这里，账号里只保留一个短 URL。
+
+> R2 有免费额度（约 10GB 存储、出网不收费），头像这种小图基本用不到付费。
+
 ## 2. 安装依赖
 
 ```bash
@@ -116,7 +127,9 @@ npx wrangler deploy
 12. 退出后能用邮箱密码重新登录
 13. 改密码后，其他设备上的登录被登出
 14. 找回密码能收到重置验证码并成功重置
-15. 确认访问 `/api/dev/outbox` 返回 **404**（说明开发开关没有带到线上）
+15. 能上传头像，且 `accounts` 表里 `avatar_url` 是一个 `/api/avatars/...` 短地址，
+    **不是** `data:` 开头的长字符串
+16. 确认访问 `/api/dev/outbox` 返回 **404**（说明开发开关没有带到线上）
 
 本地可以用 `scripts/smoke-test-auth.ps1` 先把这套流程跑一遍。
 
@@ -138,4 +151,4 @@ npx wrangler deploy
 - 每场比赛创建新房间，不复用旧房间链接
 - 赛后如需归档，可在后续版本加入房间关闭/回放功能
 - 账号密码哈希强度受 Cloudflare 免费版 CPU 限制影响，见 AUTH_SETUP.md 的「已知取舍」
-- 头像目前以 data URL 存在账号记录里，图大了会拖慢房间广播，后续建议迁到 R2
+- 头像图片存在 R2，账号里只有 URL；换头像时旧对象会自动删除

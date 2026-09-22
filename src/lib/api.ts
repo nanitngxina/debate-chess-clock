@@ -70,6 +70,10 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     controller.abort();
   }, REQUEST_TIMEOUT_MS);
 
+  // 传 FormData（比如上传头像）时不能手动指定 Content-Type，
+  // 否则会覆盖掉浏览器自动生成的 multipart boundary，服务端解析不出来。
+  const isFormDataBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
+
   let response: Response;
   try {
     response = await fetch(buildUrl(path), {
@@ -77,7 +81,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
       signal: controller.signal,
       headers: {
-        "Content-Type": "application/json",
+        ...(isFormDataBody ? {} : { "Content-Type": "application/json" }),
         ...(init?.headers ?? {}),
       },
     });
@@ -156,6 +160,21 @@ export async function updateMyAccount(token: string, input: ProfileInput): Promi
     method: "PATCH",
     headers: authHeaders(token),
     body: JSON.stringify(input),
+  });
+}
+
+/**
+ * 上传头像图片。服务端把图片存进 R2，返回的短 URL 由调用方在保存资料时一起提交。
+ * 账号记录里不会再出现 data URL。
+ */
+export async function uploadAvatar(token: string, blob: Blob): Promise<{ avatarUrl: string }> {
+  const form = new FormData();
+  form.append("file", blob, "avatar.jpg");
+
+  return requestJson<{ avatarUrl: string }>("/api/auth/avatar", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: form,
   });
 }
 

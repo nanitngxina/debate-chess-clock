@@ -15,11 +15,13 @@
 | POST | `/api/auth/logout` | 是 | 登出，**服务端真正吊销该 token** |
 | GET | `/api/auth/me` | 是 | 读取当前账号 |
 | PATCH | `/api/auth/profile` | 是 | 改出场名称 / 头像 |
+| POST | `/api/auth/avatar` | 是 | 上传头像图片（multipart，字段名 `file`），返回短 URL |
 | POST | `/api/auth/password` | 是 | 改密码：`currentPassword` + `newPassword`，会踢掉其他设备 |
 | POST | `/api/auth/email/verify` | 是 | 提交邮箱验证码：`code` |
 | POST | `/api/auth/email/resend` | 是 | 重发邮箱验证码 |
 | POST | `/api/auth/password/forgot` | 否 | 申请重置：`email`，**永远返回同样的提示**（防邮箱枚举） |
 | POST | `/api/auth/password/reset` | 否 | 提交重置：`email` + `code` + `newPassword`，会踢掉所有会话 |
+| GET | `/api/avatars/<accountId>/<file>` | 否 | 读取头像图片（公开，图片存在 R2） |
 | GET | `/api/dev/outbox` | 否 | **仅本地开发**，读最近 20 封系统发出的邮件 |
 
 登录态通过请求头传递：
@@ -30,6 +32,27 @@ Authorization: Bearer <token>
 
 > ⚠️ 旧的 `/api/accounts/register|me` 已经被上面这套取代。本地 KV 里如果还残留
 > `account:` 前缀的旧测试数据，可以直接忽略（那只是旧版本的游客档案）。
+
+### 头像怎么存的
+
+图片**本体存在 R2**，账号记录里只留一个几十字符的短地址，形如
+`/api/avatars/acct-xxxx/mucjrhq9-ku52xg.png`。
+
+流程是：
+
+1. 前端把用户选的图片裁成 256×256 JPEG
+2. `POST /api/auth/avatar` 上传 → 服务端**按文件头（magic bytes）**校验真实格式，
+   只接受 JPEG / PNG / WebP / GIF，单张上限 1MB → 存进 R2 → 返回短 URL
+3. 用户点「保存档案」时，这个 URL 才随 `PATCH /api/auth/profile` 写进账号
+4. 换头像或清空头像时，服务端会顺手把 R2 里的旧对象删掉
+
+这样有两个好处：账号记录里不再有几千字符的内联图片；图片走独立的
+`/api/avatars/...` 地址，带 `immutable` 长缓存，浏览器只下载一次。
+
+> 说明：这一段之前是坏的。旧实现把头像一个 data URL 存进账号，而服务端有个
+> 5000 字符的截断上限 —— 但一张 256×256 的 JPEG 转成 data URL 通常就有 7000+
+> 字符，于是存进去的字符串被从中间切断，头像显示成坏图。现在图片进了 R2，这个问题
+> 从根上没有了。
 
 ---
 
@@ -81,9 +104,8 @@ npx wrangler d1 migrations apply DB --remote
 - **限流的来源 IP**：优先读 `CF-Connecting-IP`（Cloudflare 会强制注入，无法伪造），
   本地开发时回退到 `X-Forwarded-For`。如果你的部署前面还有别的反向代理，
   要注意这个回退值理论上可被伪造。
-- **头像仍然以 data URL 形式存在账号里**（上限 5000 字符）。它会跟着房间状态、
-  弹幕和语音参与者一起广播，头像很大时会让移动端变卡。彻底的解法是把图片放到
-  R2 / 图床，账号里只存 URL —— 这属于后续优化，不影响本阶段功能。
+- **上传了头像但没点保存**：图片已经进了 R2，但账号没引用它，会留下一个孤儿对象。
+  上传接口按账号限流（每小时 20 次），所以最多也就这么多。
 
 ---
 

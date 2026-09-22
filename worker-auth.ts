@@ -1,4 +1,10 @@
 import { AccountProfile } from "./src/shared/types";
+import { parseAvatarObjectKey } from "./worker-avatars";
+
+/** 内联 data URL 头像（预设 SVG）允许的最大长度 */
+const MAX_INLINE_AVATAR_LENGTH = 5000;
+/** 外部图片链接允许的最大长度 */
+const MAX_AVATAR_URL_LENGTH = 2000;
 
 /**
  * 账号与鉴权核心逻辑。
@@ -253,14 +259,31 @@ export function sanitizeDisplayName(value: unknown): string {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, DISPLAY_NAME_MAX_LENGTH);
 }
 
+/**
+ * 校验并归一化头像地址。允许三种来源：
+ * 1. `/api/avatars/<accountId>/<file>` —— 我们自己上传到 R2 的（相对路径，同源访问）
+ * 2. `data:image/...` —— 内置预设头像是动态生成的内联 SVG；也用于兼容历史数据
+ * 3. `http(s)://...` —— 用户填的外部图片链接
+ * 其他一律丢弃。
+ */
 export function sanitizeAvatarUrl(value: unknown): string {
-  const trimmed = String(value ?? "").trim().slice(0, 5000);
+  const trimmed = String(value ?? "").trim();
   if (!trimmed) {
     return "";
   }
 
   if (trimmed.startsWith("data:image/")) {
+    // 内联图片是有大小上限的：预设 SVG 只有几百字节，
+    // 而上传的 JPEG data URL 有 7000+ 字符，超出就直接丢弃而不是截断成坏图。
+    return trimmed.length <= MAX_INLINE_AVATAR_LENGTH ? trimmed : "";
+  }
+
+  if (parseAvatarObjectKey(trimmed)) {
     return trimmed;
+  }
+
+  if (trimmed.length > MAX_AVATAR_URL_LENGTH) {
+    return "";
   }
 
   try {

@@ -103,6 +103,7 @@ export default function App() {
                 saving={session.saving}
                 error={session.error}
                 onUpdateProfile={session.updateProfile}
+                onUploadAvatar={session.uploadAvatar}
                 onChangePassword={session.changePassword}
                 onLogout={async () => {
                   await session.logout();
