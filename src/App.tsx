@@ -111,6 +111,7 @@ export default function App() {
       {showAuth && !session.hasAccount && (
         <div
           className="modal-backdrop"
+          data-shortcut-block
           onClick={(event) => {
             if (event.target === event.currentTarget) {
               setShowAuth(false);
@@ -128,6 +129,7 @@ export default function App() {
       {showAccountEditor && session.account && (
         <div
           className="modal-backdrop"
+          data-shortcut-block
           onClick={(event) => {
             if (event.target === event.currentTarget) {
               setShowAccountEditor(false);

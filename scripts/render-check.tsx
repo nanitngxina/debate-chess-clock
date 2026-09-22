@@ -18,6 +18,7 @@ import { AppHeader } from "../src/ui/AppHeader";
 import { AccountPanel } from "../src/ui/AccountPanel";
 import { AuthPanel } from "../src/ui/AuthPanel";
 import { BarragePanel } from "../src/ui/BarragePanel";
+import { ShortcutHints } from "../src/ui/ShortcutHints";
 import { TimerLab } from "../src/ui/TimerLab";
 import { VoicePanel } from "../src/ui/VoicePanel";
 import { AccountSession } from "../src/hooks/useAccountSession";
@@ -216,6 +217,20 @@ const cases: Case[] = [
         }),
       ),
     expect: ["Voice", "公共语音", "已加入", "主持人", "开麦中"],
+  },
+  {
+    name: "shortcut-hints",
+    render: () =>
+      renderToString(
+        createElement(ShortcutHints, {
+          shortcuts: [
+            { keys: ["space"], label: "Space", description: "暂停", run: noop },
+            { keys: ["s"], label: "S", description: "切换发言方", run: noop },
+            { keys: ["e"], label: "E", description: "结束当前回合", run: noop, disabled: true },
+          ],
+        }),
+      ),
+    expect: ["快捷键", "Space", "暂停", "切换发言方", "shortcut-hint--off"],
   },
   {
     name: "account-panel",

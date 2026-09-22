@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLiveClock } from "./hooks/useLiveClock";
 import { useRoomRealtime } from "./hooks/useRoomRealtime";
 import { useVoiceChat } from "./hooks/useVoiceChat";
+import { KeyboardShortcut, useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { sendBarrage, sendRoomCommand } from "./lib/api";
 import {
   describeConnection,
@@ -18,6 +19,7 @@ import { BarragePanel } from "./ui/BarragePanel";
 import { BrandMark } from "./ui/BrandMark";
 import { LinkStack } from "./ui/LinkStack";
 import { RulesEditor } from "./ui/RulesEditor";
+import { ShortcutHints } from "./ui/ShortcutHints";
 import { TimerLab, TimerSideView } from "./ui/TimerLab";
 import { VoicePanel } from "./ui/VoicePanel";
 
@@ -282,6 +284,104 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
     }
   };
 
+  /* -------------------------------------------------------------- 快捷键 */
+  /*
+   * 只在焦点不落在任何控件上时生效（见 useKeyboardShortcuts）。
+   * 配合下方控制台上的 onMouseDown preventDefault，点击按钮后焦点会留在页面上，
+   * 所以"点一下再按空格"这种最常见的操作路径是通的。
+   * 注：重置故意不绑快捷键 —— 它会清空回合记录，只保留按钮 + 二次确认。
+   */
+  const busy = pendingAction !== null;
+  const shortcutClock = payload ? liveClock ?? payload.room.clock : null;
+  const shortcutIsHost = Boolean(payload?.permissions.canModerate);
+  const shortcutSide = payload?.permissions.controlledSide ?? null;
+  const shortcutCanEndMyTurn = Boolean(
+    payload?.permissions.canEndOwnTurn &&
+      shortcutSide &&
+      shortcutClock?.activeSide === shortcutSide,
+  );
+  const shortcuts: KeyboardShortcut[] = [];
+
+  if (shortcutClock) {
+    if (shortcutIsHost) {
+      shortcuts.push(
+        {
+          keys: ["space"],
+          label: "Space",
+          description: shortcutClock.isRunning ? "暂停" : "开始",
+          run: () => void runCommand({ type: shortcutClock.isRunning ? "pause" : "resume" }, "run"),
+          disabled: busy || settingsOpen,
+        },
+        {
+          keys: ["s"],
+          label: "S",
+          description: "切换发言方",
+          run: () => void runCommand({ type: "switch-side" }, "switch"),
+          disabled: busy || settingsOpen || shortcutClock.activeSide === null,
+        },
+        {
+          keys: ["e"],
+          label: "E",
+          description: "结束当前回合",
+          run: () => void runCommand({ type: "end-turn" }, "turn"),
+          disabled: busy || settingsOpen || shortcutClock.activeSide === null,
+        },
+        {
+          keys: ["-"],
+          label: "−",
+          description: "选中对象 −10 秒",
+          run: () =>
+            void runCommand(
+              { type: "adjust-time", side: adjustTarget, amountSeconds: -10 },
+              "shortcut-minus",
+            ),
+          disabled: busy || settingsOpen || shortcutClock.isRunning,
+        },
+        {
+          keys: ["=", "+"],
+          label: "+",
+          description: "选中对象 +10 秒",
+          run: () =>
+            void runCommand(
+              { type: "adjust-time", side: adjustTarget, amountSeconds: 10 },
+              "shortcut-plus",
+            ),
+          disabled: busy || settingsOpen || shortcutClock.isRunning,
+        },
+      );
+    } else if (shortcutSide) {
+      shortcuts.push(
+        {
+          keys: ["space"],
+          label: "Space",
+          description: shortcutCanEndMyTurn ? "结束本回合" : "轮到你方时才能结束",
+          run: () => void runCommand({ type: "end-turn" }, "my-turn"),
+          disabled: busy || !shortcutCanEndMyTurn,
+        },
+        {
+          keys: ["m"],
+          label: "M",
+          description: voiceChat.isJoined
+            ? voiceChat.isMuted
+              ? "打开麦克风"
+              : "静音麦克风"
+            : "加入语音",
+          run: () => {
+            if (!voiceChat.isJoined) {
+              void voiceChat.joinVoice();
+              return;
+            }
+
+            void voiceChat.toggleMute();
+          },
+          disabled: voiceChat.joining || (voiceChat.isJoined && !voiceChat.canSpeakNow),
+        },
+      );
+    }
+  }
+
+  useKeyboardShortcuts(shortcuts);
+
   if (!payload) {
     return (
       <div className="gate">
@@ -304,7 +404,6 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
   );
   const isHostView = payload.permissions.canModerate;
   const isViewer = role === "viewer";
-  const busy = pendingAction !== null;
 
   const roomBar = (
     <header className="room-bar">
@@ -362,7 +461,16 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
             statusExtra={<span>{clock.isRunning ? "Running" : "Paused"}</span>}
           />
 
-          <section className="deck">
+          <section
+            className="deck"
+            onMouseDown={(event) => {
+              // 点击按钮时不让它取得焦点：否则焦点落在按钮上，全局快捷键会被让位给原生行为，
+              // "点一下开始、再按空格暂停"就会失灵。
+              if ((event.target as HTMLElement).closest("button")) {
+                event.preventDefault();
+              }
+            }}
+          >
             <div className="deck__row">
               <button
                 type="button"
@@ -503,6 +611,8 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
                 反方先发
               </button>
             </div>
+
+            <ShortcutHints shortcuts={shortcuts} />
           </section>
         </div>
 
@@ -550,7 +660,11 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
 
         {settingsOpen && (
           <>
-            <div className="drawer-backdrop" onClick={() => setSettingsOpen(false)} />
+            <div
+              className="drawer-backdrop"
+              data-shortcut-block
+              onClick={() => setSettingsOpen(false)}
+            />
             <aside className="drawer" role="dialog" aria-label="比赛配置">
               <div className="drawer__head">
                 <span className="surface__title">比赛配置</span>
@@ -786,7 +900,14 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
               }
             />
 
-            <div className="debater-deck">
+            <div
+              className="debater-deck"
+              onMouseDown={(event) => {
+                if ((event.target as HTMLElement).closest("button")) {
+                  event.preventDefault();
+                }
+              }}
+            >
               <button
                 type="button"
                 className={`btn btn--lg ${canEndMyTurn ? "btn--primary" : "btn--ghost"}`}
@@ -826,6 +947,8 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
                 </button>
               )}
             </div>
+
+            <ShortcutHints shortcuts={shortcuts} />
 
             {voiceChat.isJoined && !voiceChat.canSpeakNow && (
               <p className="feedback feedback--notice">

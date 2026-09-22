@@ -103,6 +103,53 @@ export function GuidePage({ onNavigate }: GuidePageProps) {
       <section className="section">
         <div className="section__head">
           <div>
+            <h2 className="section__title">快捷键</h2>
+            <p className="section__subtitle">比赛进行中，主持人可以不离开键盘</p>
+          </div>
+        </div>
+
+        <div className="def-list">
+          <div className="def">
+            <span className="def__term">
+              <kbd className="kbd">Space</kbd>
+            </span>
+            <p className="def__desc">主持人：开始 / 暂停。辩手：结束本回合。</p>
+          </div>
+          <div className="def">
+            <span className="def__term">
+              <kbd className="kbd">S</kbd>
+            </span>
+            <p className="def__desc">主持人：切换发言方。</p>
+          </div>
+          <div className="def">
+            <span className="def__term">
+              <kbd className="kbd">E</kbd>
+            </span>
+            <p className="def__desc">主持人：结束当前回合。</p>
+          </div>
+          <div className="def">
+            <span className="def__term">
+              <kbd className="kbd">−</kbd> <kbd className="kbd">+</kbd>
+            </span>
+            <p className="def__desc">主持人：给选中的对象 −10 / +10 秒（计时暂停时可用）。</p>
+          </div>
+          <div className="def">
+            <span className="def__term">
+              <kbd className="kbd">M</kbd>
+            </span>
+            <p className="def__desc">辩手：加入语音 / 开关麦克风。</p>
+          </div>
+        </div>
+
+        <p className="def__desc" style={{ marginTop: "var(--sp-4)" }}>
+          焦点在输入框里时快捷键不生效，正常打字不会被误触发。
+          重置没有快捷键 —— 它会清空回合记录，必须手动点击并确认。
+        </p>
+      </section>
+
+      <section className="section">
+        <div className="section__head">
+          <div>
             <h2 className="section__title">四种身份</h2>
             <p className="section__subtitle">不同的入口，相同的时间</p>
           </div>
