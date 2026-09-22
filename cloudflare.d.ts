@@ -57,6 +57,34 @@ interface AssetBinding {
   fetch(request: Request): Promise<Response>;
 }
 
+interface D1ResultMeta {
+  duration: number;
+  changes: number;
+  last_row_id: number;
+  rows_read: number;
+  rows_written: number;
+}
+
+interface D1Result<T = unknown> {
+  results: T[];
+  success: boolean;
+  meta: D1ResultMeta;
+}
+
+interface D1PreparedStatement {
+  bind(...values: unknown[]): D1PreparedStatement;
+  first<T = unknown>(colName?: string): Promise<T | null>;
+  run<T = unknown>(): Promise<D1Result<T>>;
+  all<T = unknown>(): Promise<D1Result<T>>;
+  raw<T = unknown>(): Promise<T[]>;
+}
+
+interface D1Database {
+  prepare(query: string): D1PreparedStatement;
+  batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
+  exec(query: string): Promise<{ count: number; duration: number }>;
+}
+
 interface ExportedHandler<Env = unknown> {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Response | Promise<Response>;
 }

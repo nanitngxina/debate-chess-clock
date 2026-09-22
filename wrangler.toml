@@ -1,4 +1,4 @@
-﻿name = "debate-cage-clock"
+name = "debate-cage-clock"
 main = "worker-index.ts"
 compatibility_date = "2026-03-18"
 compatibility_flags = ["enable_request_signal"]
@@ -13,6 +13,16 @@ class_name = "RoomDurableObject"
 
 [[kv_namespaces]]
 binding = "ROOM_DIRECTORY"
+
+# 账号数据（账号、会话、验证码）存 D1，与房间用的 KV 分开
+# 本地开发：npx wrangler d1 migrations apply DB --local
+# 部署前：npx wrangler d1 create debate-cage-clock-accounts
+#        然后把下面 database_id 换成创建出来的真实 id
+[[d1_databases]]
+binding = "DB"
+database_name = "debate-cage-clock-accounts"
+database_id = "local-dev-placeholder"
+migrations_dir = "migrations"
 
 [[migrations]]
 tag = "v1"

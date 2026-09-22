@@ -28,9 +28,7 @@
     "src/RoomPage.tsx",
     "src/vite-env.d.ts",
     "src/lib/**/*.ts",
-    "src/hooks/usePersistentState.ts",
-    "src/hooks/useLiveClock.ts",
-    "src/hooks/useRoomRealtime.ts",
+    "src/hooks/**/*.ts",
     "src/shared/**/*.ts",
     "src/ui/**/*.tsx"
   ],

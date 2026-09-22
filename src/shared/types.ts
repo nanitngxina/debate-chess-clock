@@ -150,24 +150,77 @@ export interface CreateRoomInput {
 
 export interface AccountProfile {
   accountId: string;
+  /** 登录邮箱（已归一化为小写） */
+  email: string;
   displayName: string;
   avatarUrl: string;
+  /** 邮箱是否已验证 */
+  emailVerified: boolean;
   createdAt: number;
   updatedAt: number;
 }
 
-export interface AccountInput {
+/** 注册 */
+export interface RegisterInput {
+  email: string;
+  password: string;
+  displayName: string;
+  avatarUrl?: string;
+}
+
+/** 登录 */
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+/** 修改资料（名字 / 头像） */
+export interface ProfileInput {
   displayName: string;
   avatarUrl: string;
+}
+
+/** 修改密码 */
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/** 申请重置密码 */
+export interface ForgotPasswordInput {
+  email: string;
+}
+
+/** 提交重置密码 */
+export interface ResetPasswordInput {
+  email: string;
+  code: string;
+  newPassword: string;
 }
 
 export interface AccountResponse {
   account: AccountProfile;
 }
 
-export interface AccountSessionResponse extends AccountResponse {
+/** 注册 / 登录成功后返回的会话 */
+export interface AuthSessionResponse extends AccountResponse {
   token: string;
   expiresAt: number;
+  /** 是否已发送邮箱验证码 */
+  emailVerificationSent?: boolean;
+  /**
+   * 仅开发模式（没有配置发信服务且本地开了开发收件箱）返回，
+   * 方便没有域名时也能完整测试流程。线上永远不会有这个字段。
+   */
+  devCode?: string;
+}
+
+/** 通用操作结果（发验证码、重置密码等） */
+export interface AuthMessageResponse {
+  ok: true;
+  message?: string;
+  emailVerificationSent?: boolean;
+  devCode?: string;
 }
 
 export type RoomCommand =

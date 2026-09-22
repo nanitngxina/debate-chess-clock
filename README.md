@@ -2,18 +2,28 @@
 
 把原先“主持人在本地电脑上运行的单机棋钟”，重构成了一个可部署上线、可多人同步观看和操作的网页应用。
 
-这版的目标不是一步到位做完整用户系统，而是先把真实可用的在线房间模型跑通：
+## 已经跑通的东西
+
+**在线房间**
 
 - 主持人后台登录后创建房间
-- 每个房间自动生成四类链接
-- 主持人链接
-- 正方辩手链接
-- 反方辩手链接
-- 观众链接
+- 每个房间自动生成四类链接（主持人 / 正方 / 反方 / 观众）
 - 同一房间内所有端实时同步
 - 观众无需登录即可观看并发送弹幕
 - 辩手只能结束自己一方的当前回合
 - 主持人拥有完整控制权
+- 房间内语音通话（WebRTC，信令走房间通道）
+
+**账号系统**（2026 年新增，见 [AUTH_SETUP.md](./AUTH_SETUP.md)）
+
+- 注册（邮箱 + 密码 + 出场名称）
+- 登录 / 退出登录
+- 邮箱验证码验证
+- 修改密码（会自动登出其他设备）
+- 忘记密码 → 邮箱验证码 → 重置
+- 出场档案（名字 + 头像）跟着账号走，换设备也在
+- 接口限流，防注册刷号
+- 发信通道可插拔：没配域名时走开发模式，配了自动切真发信
 
 ## 当前架构
 
@@ -21,23 +31,10 @@
 - 在线状态层：Cloudflare Worker
 - 房间实时状态：Cloudflare Durable Object
 - 房间目录：Cloudflare KV
+- **账号数据：Cloudflare D1**（账号 / 会话 / 验证码 / 限流 / 发信记录）
 - 实时同步方式：SSE（Server-Sent Events）+ HTTP 指令写入
 
-这个组合的好处是第一版实现成本低、部署简单、很适合中国大陆可访问的公共网页应用场景。
-
-## 已实现的能力
-
-- 多房间
-- 主持人后台登录与开房
-- 房间级四类权限链接
-- 主持人完整控制
-- 暂停 / 开始 / 切边 / 结束回合 / 重置
-- 修改辩题、规则说明、双方名称
-- 修改初始时间、总时长、自动加时规则
-- 观众弹幕
-- 手机端和桌面端响应式界面
-- 房间回合历史
-- Cloudflare 部署骨架
+账号数据放在 D1 而不是 KV，是因为注册系统需要唯一索引（邮箱唯一）、事务和可吊销的会话记录 —— KV 是最终一致的，做不到这些。
 
 ## 角色权限
 
@@ -55,87 +52,89 @@
 ### 主持人
 
 - 拥有全部房间控制权
-- 可修改辩题
-- 可修改规则说明
-- 可修改双方名称
-- 可暂停和继续
-- 可切边
-- 可结束回合
-- 可重置
-- 可手动增减时间
-- 可调整计时规则
+- 可修改辩题、规则说明、双方名称
+- 可暂停和继续、切边、结束回合、重置
+- 可手动增减时间、调整计时规则
 
 ## 项目结构
 
 ```text
 .
-├─ src/                  # React 前端
-│  ├─ shared/            # 前后端共享的类型与计时引擎
-│  ├─ ui/                # 可复用界面组件
-│  ├─ hooks/             # 前端状态与实时同步 Hook
-│  ├─ App.tsx            # 前端入口路由
-│  ├─ DashboardPage.tsx  # 主持人后台
-│  ├─ MarketingPage.tsx  # 首页
-│  └─ RoomPage.tsx       # 房间页
-├─ worker-index.ts       # Cloudflare Worker 入口
-├─ worker-room-object.ts # Durable Object 房间逻辑
-├─ worker-types.ts       # Worker 环境类型
-├─ cloudflare.d.ts       # 本地 Worker 类型声明
-├─ wrangler.toml         # Cloudflare 部署配置
-├─ tsconfig.worker.json  # Worker 类型检查配置
-├─ DEPLOYMENT.md         # 部署说明
+├─ src/                    # React 前端
+│  ├─ shared/              # 前后端共享的类型与计时引擎
+│  ├─ ui/                  # 可复用界面组件（含 AuthPanel / AccountPanel）
+│  ├─ hooks/               # 前端状态与实时同步 Hook（含 useAccountSession）
+│  ├─ App.tsx              # 前端入口路由
+│  ├─ DashboardPage.tsx    # 主持人后台
+│  ├─ MarketingPage.tsx    # 首页
+│  └─ RoomPage.tsx         # 房间页
+├─ migrations/
+│  └─ 0001_accounts.sql    # 账号数据库建表脚本
+├─ scripts/
+│  └─ smoke-test-auth.ps1  # 账号接口端到端冒烟测试
+├─ worker-index.ts         # Cloudflare Worker 入口（路由 + 账号接口）
+├─ worker-auth.ts          # 密码哈希 / 会话 / 验证码 / 限流
+├─ worker-email.ts         # 发信抽象（Resend / Brevo / 开发模式）
+├─ worker-room-object.ts   # Durable Object 房间逻辑
+├─ worker-types.ts         # Worker 环境类型
+├─ cloudflare.d.ts         # 本地 Worker 类型声明（含 D1 类型）
+├─ wrangler.toml           # Cloudflare 部署配置
+├─ tsconfig.worker.json    # Worker 类型检查配置
+├─ AUTH_SETUP.md           # 账号系统与发信配置说明
+├─ DEPLOYMENT.md           # 部署说明
 └─ LICENSE
 ```
 
 ## 本地开发
 
-### 前端
+最省事的方式：直接双击 **`启动.bat`**（或 `start.bat`）。它会自动
 
-如果本机已安装 Node.js：
+1. 检查 Node.js / npm
+2. 首次运行时安装依赖
+3. 没有 `.dev.vars` 就从 `.dev.vars.example` 复制一份
+4. **应用本地 D1 数据库迁移**（建账号相关的表）
+5. 起 Worker API（`http://127.0.0.1:8787`）
+6. 起前端（`http://localhost:5173`）
+
+手动方式：
 
 ```bash
 npm install
-npm run dev
+npx wrangler d1 migrations apply DB --local   # 必须先建表，否则注册会报错
+npm run dev:worker                            # 终端 1：Worker API
+npm run dev                                   # 终端 2：前端
 ```
 
 ### 类型检查
 
 ```bash
-npm run check
+npm run check    # 前端 + Worker 两套 tsconfig 一起检查
 ```
 
-### Cloudflare 部署
+### 账号接口冒烟测试
 
-```bash
-npm run build
-npx wrangler deploy
+Worker 跑起来之后，在 PowerShell 里执行：
+
+```powershell
+powershell -File scripts/smoke-test-auth.ps1
 ```
 
-更完整的部署步骤见 [DEPLOYMENT.md](./DEPLOYMENT.md)。
+它会完整走一遍：注册 → 邮箱验证 → 登录 → 改资料 → 改密码（并确认旧会话被踢）→
+找回密码 → 重置密码 → 登出（并确认 token 真的失效）→ 各种非法输入校验。全部通过会打印 `PASS n / FAIL 0`。
 
 ## 环境变量
 
-Worker 需要至少两个敏感配置：
+账号系统相关的变量见 [AUTH_SETUP.md](./AUTH_SETUP.md)，最小集合是：
 
-- `HOST_ADMIN_PASSWORD`
-- `ADMIN_SESSION_SECRET`
+| 变量 | 说明 |
+| --- | --- |
+| `HOST_ADMIN_PASSWORD` | 主持人后台口令 |
+| `ADMIN_SESSION_SECRET` | 后台会话签名密钥，请用足够长的随机串 |
+| `ENABLE_DEV_OUTBOX` | 仅本地开发设为 `true`，可用 `/api/dev/outbox` 读验证码。**线上必须留空** |
+| `EMAIL_PROVIDER` / `EMAIL_FROM` / `RESEND_API_KEY` | 真发信时才需要，见 AUTH_SETUP.md |
+| `PASSWORD_ITERATIONS` | PBKDF2 迭代次数，默认 100000 |
 
-本地开发可参考 `.dev.vars.example`。
-
-## 开源发布建议
-
-这份代码已经整理成可开源仓库的基础形态，但当前工作区还没有真正连到 GitHub 远程仓库。推荐下一步这样做：
-
-1. 在 GitHub 新建仓库
-2. 本地执行 `git init`
-3. 提交代码并添加远程仓库
-4. 在 Cloudflare 中创建 KV、绑定 Durable Object、设置 Worker secrets
-5. 首次部署并拉测试员压测
-
-## 已知说明
-
-- 当前我无法在这个工作区里直接帮你创建 GitHub 远程仓库，也无法直接完成 Cloudflare 线上发布，因为这里没有现成的登录凭据和命令环境。
-- 我已经把第一版需要的代码、配置文件和部署骨架补齐，后续主要剩“装环境、填 Cloudflare 资源 ID、真正上线验证”。
+本地开发参考 `.dev.vars.example`；`.dev.vars` 已被 `.gitignore` 忽略，不会提交。
 
 ## License
 

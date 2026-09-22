@@ -6,6 +6,8 @@ import { RoomPage } from "./RoomPage";
 import { parseRoute } from "./lib/router";
 import { AccountAvatar } from "./ui/AccountAvatar";
 import { AccountPanel } from "./ui/AccountPanel";
+import { AuthPanel } from "./ui/AuthPanel";
+import { VerifyEmailBanner } from "./ui/VerifyEmailBanner";
 
 function navigate(pathname: string) {
   window.history.pushState({}, "", pathname);
@@ -15,7 +17,7 @@ function navigate(pathname: string) {
 export default function App() {
   const [route, setRoute] = useState(() => parseRoute(window.location.pathname));
   const [showAccountEditor, setShowAccountEditor] = useState(false);
-  const accountSession = useAccountSession();
+  const session = useAccountSession();
 
   useEffect(() => {
     const handlePopState = () => {
@@ -54,60 +56,58 @@ export default function App() {
 
         <button
           type="button"
-          className={`topbar__account ${accountSession.account ? "topbar__account--button" : ""}`}
+          className={`topbar__account ${session.account ? "topbar__account--button" : ""}`}
           onClick={() => {
-            if (accountSession.account) {
+            if (session.account) {
               setShowAccountEditor(true);
             }
           }}
         >
-          {accountSession.account ? (
+          {session.account ? (
             <>
               <AccountAvatar
-                displayName={accountSession.account.displayName}
-                avatarUrl={accountSession.account.avatarUrl}
+                displayName={session.account.displayName}
+                avatarUrl={session.account.avatarUrl}
                 className="account-avatar--small"
               />
               <div>
-                <strong>{accountSession.account.displayName}</strong>
-                <span>点击编辑档案</span>
+                <strong>{session.account.displayName}</strong>
+                <span>{session.account.emailVerified ? "点击编辑档案" : "邮箱未验证"}</span>
               </div>
             </>
           ) : (
             <div>
-              <strong>未创建档案</strong>
-              <span>先完成角色创建</span>
+              <strong>未登录</strong>
+              <span>登录或注册账号</span>
             </div>
           )}
         </button>
       </header>
 
-      {!accountSession.hasAccount ? (
+      {session.hasAccount && session.needsEmailVerification && <VerifyEmailBanner session={session} />}
+
+      {!session.hasAccount ? (
         <main className="account-gate">
-          <AccountPanel
-            account={accountSession.account}
-            loading={accountSession.loading}
-            saving={accountSession.saving}
-            error={accountSession.error}
-            mode="gate"
-            onRegister={accountSession.register}
-            onUpdate={accountSession.update}
-            onLogout={accountSession.logout}
-          />
+          {session.loading ? (
+            <p className="account-gate__loading">正在恢复登录状态...</p>
+          ) : (
+            <AuthPanel session={session} />
+          )}
         </main>
       ) : (
         <>
-          {showAccountEditor && (
+          {showAccountEditor && session.account && (
             <div className="account-modal">
               <AccountPanel
-                account={accountSession.account}
-                loading={accountSession.loading}
-                saving={accountSession.saving}
-                error={accountSession.error}
-                mode="modal"
-                onRegister={accountSession.register}
-                onUpdate={accountSession.update}
-                onLogout={accountSession.logout}
+                account={session.account}
+                saving={session.saving}
+                error={session.error}
+                onUpdateProfile={session.updateProfile}
+                onChangePassword={session.changePassword}
+                onLogout={async () => {
+                  await session.logout();
+                  setShowAccountEditor(false);
+                }}
                 onClose={() => setShowAccountEditor(false)}
               />
             </div>
@@ -117,7 +117,7 @@ export default function App() {
           {route.name === "dashboard" && (
             <DashboardPage onOpenRoom={(url) => window.location.assign(url)} />
           )}
-          {route.name === "room" && <RoomPage roomId={route.roomId} account={accountSession.account} />}
+          {route.name === "room" && <RoomPage roomId={route.roomId} account={session.account} />}
         </>
       )}
     </div>

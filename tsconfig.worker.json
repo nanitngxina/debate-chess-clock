@@ -12,6 +12,8 @@
   "include": [
     "cloudflare.d.ts",
     "worker-index.ts",
+    "worker-auth.ts",
+    "worker-email.ts",
     "worker-room-object.ts",
     "worker-types.ts",
     "src/shared/**/*.ts"

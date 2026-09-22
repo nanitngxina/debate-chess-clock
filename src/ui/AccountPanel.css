@@ -1,0 +1,55 @@
+/* 账号设置面板的补充样式（原有 .account-panel__* 样式在 index.css 里） */
+
+.account-panel__password {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--card-border);
+}
+
+.account-panel__password label {
+  display: grid;
+  gap: 7px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.account-panel__password input {
+  padding: 12px 14px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+}
+
+.account-panel__password input:focus {
+  outline: none;
+  border-color: rgba(196, 106, 53, 0.5);
+  box-shadow: 0 0 0 3px rgba(196, 106, 53, 0.14);
+}
+
+.account-badge {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(185, 62, 49, 0.4);
+  background: rgba(185, 62, 49, 0.12);
+  font-size: 0.74rem;
+  color: #e3b0a9;
+  vertical-align: middle;
+}
+
+.account-badge--ok {
+  border-color: rgba(78, 126, 166, 0.42);
+  background: rgba(78, 126, 166, 0.14);
+  color: #bcd2e4;
+}
+
+.account-gate__loading {
+  margin: 0 auto;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--muted);
+}

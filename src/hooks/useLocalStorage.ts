@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { DebateConfig, DebateInfo, DEFAULT_CONFIG, DEFAULT_DEBATE_INFO } from '../types';
 
 const CONFIG_KEY = 'debate-chess-clock-config';

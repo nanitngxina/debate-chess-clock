@@ -1,2 +1,32 @@
 HOST_ADMIN_PASSWORD=replace-with-a-strong-password
 ADMIN_SESSION_SECRET=replace-with-a-long-random-secret
+
+# 本地开发开关：打开后可以用 GET /api/dev/outbox 读到系统发出的邮件原文。
+# 线上部署时务必删掉这一行（否则等于把验证码公开出去）。
+ENABLE_DEV_OUTBOX=true
+
+# ---------------------------------------------------------------------------
+# 邮件发信（可选）
+# ---------------------------------------------------------------------------
+# 一个都不配时，系统自动进入「开发模式」：
+#   - 验证码会打到 wrangler dev 的控制台
+#   - 同时写进 email_outbox 表，可用 /api/dev/outbox 查看
+#   - 注册 / 邮箱验证 / 找回密码 全流程都能在本地跑通，不需要域名、不花钱
+#
+# 等你买了域名并在服务商那边验证通过（配 SPF / DKIM），
+# 把下面三行取消注释、填上真实值，就自动切换成真发信，代码不用改：
+#
+# EMAIL_PROVIDER=resend
+# EMAIL_FROM=八角笼辩论棋钟 <no-reply@你的域名>
+# RESEND_API_KEY=re_xxxxxxxxxxxxxxxx
+#
+# （Brevo 也一样：EMAIL_PROVIDER=brevo + BREVO_API_KEY=...）
+
+# ---------------------------------------------------------------------------
+# 密码哈希强度
+# ---------------------------------------------------------------------------
+# PBKDF2 迭代次数，默认 100000。
+# 注意：Cloudflare 免费版 Worker 有 CPU 时间限制（约 10ms/请求），
+# 迭代次数太高会报 1102 错误。本地开发不受此限制。
+# 线上如果遇到 CPU 超限，把这个值调小，或者升级到 Workers Paid（$5/月）。
+# PASSWORD_ITERATIONS=100000

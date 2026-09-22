@@ -1,12 +1,18 @@
 import {
-  AccountInput,
   AccountResponse,
-  AccountSessionResponse,
   AdminLoginResponse,
+  AuthMessageResponse,
+  AuthSessionResponse,
   BarrageRequest,
+  ChangePasswordInput,
   CommandRequest,
   CreateRoomInput,
   CreateRoomResponse,
+  ForgotPasswordInput,
+  LoginInput,
+  ProfileInput,
+  RegisterInput,
+  ResetPasswordInput,
   RoomAccessPayload,
   RoomSummary,
   VoiceSignalPollResponse,
@@ -26,6 +32,17 @@ function truncateText(value: string, limit = 200): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+/** 带 HTTP 状态码的接口错误，方便调用方区分「未登录(401)」和别的失败 */
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
 }
 
 async function readResponseBody(
@@ -80,14 +97,14 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     const fallback = `请求失败（${response.status}）`;
 
     if (body.hasJson && isRecord(body.json) && typeof body.json.error === "string" && body.json.error) {
-      throw new Error(body.json.error);
+      throw new ApiError(body.json.error, response.status);
     }
 
     if (body.text) {
-      throw new Error(truncateText(body.text));
+      throw new ApiError(truncateText(body.text), response.status);
     }
 
-    throw new Error(fallback);
+    throw new ApiError(fallback, response.status);
   }
 
   if (!body.hasJson) {
@@ -96,6 +113,124 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
   return body.json as T;
 }
+
+function authHeaders(token: string): Record<string, string> {
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 账号 / 鉴权
+// ---------------------------------------------------------------------------
+
+export async function registerAccount(input: RegisterInput): Promise<AuthSessionResponse> {
+  return requestJson<AuthSessionResponse>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function loginAccount(input: LoginInput): Promise<AuthSessionResponse> {
+  return requestJson<AuthSessionResponse>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function logoutAccount(token: string): Promise<void> {
+  await requestJson<{ ok: true }>("/api/auth/logout", {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+export async function fetchMyAccount(token: string): Promise<AccountResponse> {
+  return requestJson<AccountResponse>("/api/auth/me", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function updateMyAccount(token: string, input: ProfileInput): Promise<AccountResponse> {
+  return requestJson<AccountResponse>("/api/auth/profile", {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(input),
+  });
+}
+
+export async function changeMyPassword(token: string, input: ChangePasswordInput): Promise<void> {
+  await requestJson<{ ok: true }>("/api/auth/password", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(input),
+  });
+}
+
+export async function verifyMyEmail(token: string, code: string): Promise<AccountResponse> {
+  return requestJson<AccountResponse>("/api/auth/email/verify", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ code }),
+  });
+}
+
+export async function resendMyVerification(token: string): Promise<AuthMessageResponse> {
+  return requestJson<AuthMessageResponse>("/api/auth/email/resend", {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+export async function requestPasswordReset(input: ForgotPasswordInput): Promise<AuthMessageResponse> {
+  return requestJson<AuthMessageResponse>("/api/auth/password/forgot", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function resetPassword(input: ResetPasswordInput): Promise<void> {
+  await requestJson<{ ok: true }>("/api/auth/password/reset", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 主持人后台
+// ---------------------------------------------------------------------------
+
+export async function loginAdmin(password: string): Promise<AdminLoginResponse> {
+  return requestJson<AdminLoginResponse>("/api/admin/login", {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}
+
+export async function listRooms(token: string): Promise<{ rooms: RoomSummary[] }> {
+  return requestJson<{ rooms: RoomSummary[] }>("/api/admin/rooms", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createRoom(token: string, input: CreateRoomInput): Promise<CreateRoomResponse> {
+  return requestJson<CreateRoomResponse>("/api/admin/rooms", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteRoom(token: string, roomId: string): Promise<void> {
+  await requestJson<{ ok: true }>(`/api/admin/rooms/${encodeURIComponent(roomId)}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 房间
+// ---------------------------------------------------------------------------
 
 export function buildEventsUrl(
   roomId: string,
@@ -106,65 +241,6 @@ export function buildEventsUrl(
 ): string {
   const query = new URLSearchParams({ role, token, presenceId, clientId });
   return buildUrl(`/api/rooms/${encodeURIComponent(roomId)}/events?${query.toString()}`);
-}
-
-export async function loginAdmin(password: string): Promise<AdminLoginResponse> {
-  return requestJson<AdminLoginResponse>("/api/admin/login", {
-    method: "POST",
-    body: JSON.stringify({ password }),
-  });
-}
-
-export async function registerAccount(input: AccountInput): Promise<AccountSessionResponse> {
-  return requestJson<AccountSessionResponse>("/api/accounts/register", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
-export async function fetchMyAccount(token: string): Promise<AccountResponse> {
-  return requestJson<AccountResponse>("/api/accounts/me", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-}
-
-export async function updateMyAccount(token: string, input: AccountInput): Promise<AccountResponse> {
-  return requestJson<AccountResponse>("/api/accounts/me", {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(input),
-  });
-}
-
-export async function listRooms(token: string): Promise<{ rooms: RoomSummary[] }> {
-  return requestJson<{ rooms: RoomSummary[] }>("/api/admin/rooms", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-}
-
-export async function createRoom(token: string, input: CreateRoomInput): Promise<CreateRoomResponse> {
-  return requestJson<CreateRoomResponse>("/api/admin/rooms", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(input),
-  });
-}
-
-export async function deleteRoom(token: string, roomId: string): Promise<void> {
-  await requestJson<{ ok: true }>(`/api/admin/rooms/${encodeURIComponent(roomId)}`, {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
 }
 
 export async function fetchRoomAccess(roomId: string, role: string, token: string): Promise<RoomAccessPayload> {

@@ -1,19 +1,18 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { findAvatarPresetByUrl, ACCOUNT_AVATAR_PRESETS } from "../lib/accountAvatarPresets";
 import { prepareAvatarUpload } from "../lib/accountAvatarUpload";
-import { AccountInput, AccountProfile } from "../shared/types";
+import { AccountProfile, ChangePasswordInput, ProfileInput } from "../shared/types";
 import { AccountAvatar } from "./AccountAvatar";
+import "./AccountPanel.css";
 
 interface AccountPanelProps {
-  account: AccountProfile | null;
-  loading: boolean;
+  account: AccountProfile;
   saving: boolean;
   error: string | null;
-  mode: "gate" | "modal";
-  onRegister: (input: AccountInput) => Promise<void>;
-  onUpdate: (input: AccountInput) => Promise<void>;
-  onLogout: () => void;
-  onClose?: () => void;
+  onUpdateProfile: (input: ProfileInput) => Promise<void>;
+  onChangePassword: (input: ChangePasswordInput) => Promise<void>;
+  onLogout: () => Promise<void>;
+  onClose: () => void;
 }
 
 const CUSTOM_AVATAR_ID = "custom";
@@ -22,12 +21,10 @@ const FALLBACK_DISPLAY_NAME = "未命名旅人";
 
 export function AccountPanel({
   account,
-  loading,
   saving,
   error,
-  mode,
-  onRegister,
-  onUpdate,
+  onUpdateProfile,
+  onChangePassword,
   onLogout,
   onClose,
 }: AccountPanelProps) {
@@ -38,9 +35,17 @@ export function AccountPanel({
   const [uploadedAvatarUrl, setUploadedAvatarUrl] = useState("");
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
+  // 改密码
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordNotice, setPasswordNotice] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
   useEffect(() => {
-    const nextDisplayName = account?.displayName ?? "";
-    const nextAvatarUrl = account?.avatarUrl ?? "";
+    const nextDisplayName = account.displayName ?? "";
+    const nextAvatarUrl = account.avatarUrl ?? "";
     const matchedPreset = findAvatarPresetByUrl(nextAvatarUrl);
     const isUploadedAvatar = nextAvatarUrl.startsWith("data:image/");
 
@@ -70,33 +75,55 @@ export function AccountPanel({
     return ACCOUNT_AVATAR_PRESETS.find((preset) => preset.id === avatarChoice)?.avatarUrl ?? "";
   }, [avatarChoice, customAvatarUrl, uploadedAvatarUrl]);
 
-  const previewName = displayName.trim() || account?.displayName || FALLBACK_DISPLAY_NAME;
-  const isGateMode = mode === "gate";
-  const title = account
-    ? isGateMode
-      ? "继续你的档案"
-      : "编辑出场档案"
-    : "创建你的出场档案";
-  const description = account
-    ? "这个档案会保存在当前浏览器里，后面进入房间会直接带上名字和头像。"
-    : "像游戏开局创建角色一样，先选一个名字和形象。这里不需要密码。";
+  const previewName = displayName.trim() || account.displayName || FALLBACK_DISPLAY_NAME;
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
 
-    const normalizedDisplayName = displayName.trim() || account?.displayName?.trim() || FALLBACK_DISPLAY_NAME;
+    const normalizedDisplayName = displayName.trim() || account.displayName?.trim() || FALLBACK_DISPLAY_NAME;
     if (!displayName.trim()) {
       setDisplayName(normalizedDisplayName);
     }
 
-    const input = {
+    void onUpdateProfile({
       displayName: normalizedDisplayName,
       avatarUrl: resolvedAvatarUrl,
-    };
-
-    void (account ? onUpdate(input) : onRegister(input)).catch(() => {
-      // Errors are already surfaced by the session hook.
+    }).catch(() => {
+      // 错误已由 session hook 记录
     });
+  };
+
+  const handleChangePassword = (event: FormEvent) => {
+    event.preventDefault();
+    setPasswordError(null);
+    setPasswordNotice(null);
+
+    if (!currentPassword) {
+      setPasswordError("请填写当前密码");
+      return;
+    }
+
+    if (newPassword.length < 8 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      setPasswordError("新密码至少 8 位，且同时包含字母和数字");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("两次输入的新密码不一致");
+      return;
+    }
+
+    void onChangePassword({ currentPassword, newPassword })
+      .then(() => {
+        setPasswordNotice("密码已更新。其他设备上的登录已被登出。");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setShowPasswordForm(false);
+      })
+      .catch(() => {
+        // 错误已由 session hook 记录
+      });
   };
 
   const handleUploadClick = () => {
@@ -126,18 +153,21 @@ export function AccountPanel({
   };
 
   return (
-    <section className={`card account-panel ${isGateMode ? "account-panel--gate" : "account-panel--modal"}`}>
+    <section className="card account-panel account-panel--modal">
       <div className="account-panel__hero">
         <div>
-          <span className="card__eyebrow">{isGateMode ? "角色创建" : "档案编辑"}</span>
-          <h2>{title}</h2>
-          <p>{loading ? "正在恢复本地档案..." : description}</p>
+          <span className="card__eyebrow">账号设置</span>
+          <h2>编辑出场档案</h2>
+          <p>
+            {account.email}
+            <span className={`account-badge ${account.emailVerified ? "account-badge--ok" : ""}`}>
+              {account.emailVerified ? "邮箱已验证" : "邮箱未验证"}
+            </span>
+          </p>
         </div>
-        {!isGateMode && account && (
-          <button type="button" className="button button--ghost" onClick={onClose}>
-            关闭
-          </button>
-        )}
+        <button type="button" className="button button--ghost" onClick={onClose}>
+          关闭
+        </button>
       </div>
 
       <form className="account-panel__form" onSubmit={handleSubmit}>
@@ -254,16 +284,82 @@ export function AccountPanel({
         </div>
 
         <div className="account-panel__actions">
-          <button type="submit" className="button" disabled={loading || saving}>
-            {saving ? "生成中..." : account ? "保存档案" : "进入辩论场"}
+          <button type="submit" className="button" disabled={saving}>
+            {saving ? "保存中..." : "保存档案"}
           </button>
-          {account && (
-            <button type="button" className="button button--ghost" disabled={saving} onClick={onLogout}>
-              切换账户
-            </button>
-          )}
+          <button
+            type="button"
+            className="button button--ghost"
+            disabled={saving}
+            onClick={() => {
+              setShowPasswordForm((previous) => !previous);
+              setPasswordError(null);
+              setPasswordNotice(null);
+            }}
+          >
+            修改密码
+          </button>
+          <button
+            type="button"
+            className="button button--ghost"
+            disabled={saving}
+            onClick={() => {
+              void onLogout();
+            }}
+          >
+            退出登录
+          </button>
         </div>
       </form>
+
+      {showPasswordForm && (
+        <form className="account-panel__password" onSubmit={handleChangePassword}>
+          <div className="account-panel__section-header">
+            <strong>修改密码</strong>
+            <span>修改后，其他设备上的登录会被自动登出</span>
+          </div>
+
+          <label>
+            当前密码
+            <input
+              type="password"
+              value={currentPassword}
+              autoComplete="current-password"
+              onChange={(event) => setCurrentPassword(event.target.value)}
+            />
+          </label>
+
+          <label>
+            新密码
+            <input
+              type="password"
+              value={newPassword}
+              autoComplete="new-password"
+              placeholder="至少 8 位，含字母和数字"
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+          </label>
+
+          <label>
+            确认新密码
+            <input
+              type="password"
+              value={confirmPassword}
+              autoComplete="new-password"
+              onChange={(event) => setConfirmPassword(event.target.value)}
+            />
+          </label>
+
+          <div className="account-panel__actions">
+            <button type="submit" className="button" disabled={saving}>
+              {saving ? "提交中..." : "确认修改"}
+            </button>
+          </div>
+
+          {passwordNotice && <p className="feedback feedback--success">{passwordNotice}</p>}
+          {passwordError && <p className="feedback feedback--error">{passwordError}</p>}
+        </form>
+      )}
 
       {error && <p className="feedback feedback--error">{error}</p>}
     </section>
