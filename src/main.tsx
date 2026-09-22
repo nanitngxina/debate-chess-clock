@@ -1,7 +1,12 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-// 基础样式必须先于组件样式导入，否则组件的覆盖规则会在打包时排到 index.css 前面而被覆盖掉
+// 样式导入顺序在这里统一定义，不要在组件里分散 import —— 顺序错了会被静默覆盖。
+// 迁移期说明：index.css 是旧样式，正在逐页替换，全部迁完就删掉；
+// styles/* 是新的 Design System（tokens -> base -> components -> 各页面）。
 import "./index.css";
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/components.css";
 import App from "./App";
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
