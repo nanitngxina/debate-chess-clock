@@ -2,16 +2,33 @@
   [string]$BaseUrl = 'http://127.0.0.1:8787'
 )
 
-# 账号系统端到端冒烟测试
+# End-to-end smoke test for the account system
 #
-# 用法（先确保 Worker 已经跑起来）：
+# Usage (start the Worker first):
 #   powershell -File scripts/smoke-test-auth.ps1
-#   powershell -File scripts/smoke-test-auth.ps1 -BaseUrl https://你的域名
+#   powershell -File scripts/smoke-test-auth.ps1 -BaseUrl https://your-domain
 #
-# 会用「开发模式」返回的验证码跑完整个流程，因此需要 .dev.vars 里有
-# ENABLE_DEV_OUTBOX=true（线上跑这个脚本时不会有 devCode，验证步骤会失败）。
+# Drives the whole flow using codes from dev email mode, so .dev.vars must have
+# ENABLE_DEV_OUTBOX=true. Production has no devCode, so the verify steps fail.
+#
+# NOTE: keep every comment in this file ASCII-only, and keep the UTF-8 BOM.
+# Windows PowerShell 5.1 reads a BOM-less file as ANSI, and an odd-length run of
+# Chinese bytes can swallow the following newline -- turning the next statement
+# into comment text and silently disabling it. That is not hypothetical: it is
+# exactly what broke the avatar assertions during development. The guard below
+# warns if the BOM ever goes missing again.
 
 $ErrorActionPreference = 'Stop'
+
+if ($PSVersionTable.PSVersion.Major -lt 6 -and $MyInvocation.MyCommand.Path) {
+  $scriptBytes = [System.IO.File]::ReadAllBytes($MyInvocation.MyCommand.Path)
+  $hasBom = $scriptBytes.Length -ge 3 -and
+    $scriptBytes[0] -eq 0xEF -and $scriptBytes[1] -eq 0xBB -and $scriptBytes[2] -eq 0xBF
+  if (-not $hasBom) {
+    Write-Warning ('{0} is missing its UTF-8 BOM; Chinese test data may be mis-decoded.' -f (Split-Path $MyInvocation.MyCommand.Path -Leaf))
+  }
+}
+
 $base = $BaseUrl.TrimEnd('/')
 $script:pass = 0
 $script:fail = 0
@@ -33,7 +50,7 @@ function Call-Api {
 
   $headers = @{}
   if ($Token) { $headers['Authorization'] = "Bearer $Token" }
-  # 用独立的来源 IP 隔离限流桶，避免多轮测试互相干扰
+  # Use a distinct source IP so repeated runs do not share rate limit buckets
   if ($script:clientIp) { $headers['X-Forwarded-For'] = $script:clientIp }
 
   $params = @{
@@ -83,7 +100,7 @@ function Call-Upload {
     [string]$Token
   )
 
-  # PowerShell 5.1 没有 -Form，只能手工拼 multipart 请求体
+  # PowerShell 5.1 has no -Form, so build the multipart body by hand
   $boundary = [Guid]::NewGuid().ToString()
   $stream = New-Object System.IO.MemoryStream
   $head = [System.Text.Encoding]::UTF8.GetBytes(
@@ -291,7 +308,7 @@ $login4 = Call-Api -Method POST -Path '/api/auth/login' -Body @{ email = $email;
 Check 'login for avatar tests' ($login4.Status -eq 200) $login4.Text
 $token4 = $login4.Data.token
 
-# 一张最小的合法 1x1 PNG
+# A minimal valid 1x1 PNG
 $png = [Convert]::FromBase64String('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==')
 
 $upload = Call-Upload -Path '/api/auth/avatar' -Bytes $png -FileName 'a.png' -ContentType 'image/png' -Token $token4
@@ -313,7 +330,20 @@ $saved = Call-Api -Method PATCH -Path '/api/auth/profile' -Token $token4 -Body @
 Check 'profile keeps the R2 avatar url' ($saved.Data.account.avatarUrl -eq $avatarUrl) $saved.Text
 Check 'account no longer stores a data url' (-not ($saved.Data.account.avatarUrl -like 'data:*')) $saved.Data.account.avatarUrl
 
-# 伪装成图片的非图片内容必须被拒绝（服务端按文件头判断，不信 Content-Type）
+# A former frontend bug submitted the local preview data URL as the avatar. It is
+# over the inline limit: it must now be rejected outright, not silently cleared.
+$hugeInline = 'data:image/jpeg;base64,' + ('A' * 8000)
+$badAvatar = Call-Api -Method PATCH -Path '/api/auth/profile' -Token $token4 -Body @{
+  displayName = '头像测试'
+  avatarUrl   = $hugeInline
+}
+Write-Output ("  status={0} body={1}" -f $badAvatar.Status, $badAvatar.Text)
+Check 'oversized inline avatar rejected, not silently cleared' ($badAvatar.Status -eq 400) $badAvatar.Text
+
+$stillThere = Call-Api -Method GET -Path '/api/auth/me' -Token $token4
+Check 'existing avatar survives the rejected update' ($stillThere.Data.account.avatarUrl -eq $avatarUrl) $stillThere.Text
+
+# Non-image content must be rejected: the server sniffs magic bytes, not Content-Type.
 $fake = [System.Text.Encoding]::UTF8.GetBytes('this is definitely not an image')
 $rejected = Call-Upload -Path '/api/auth/avatar' -Bytes $fake -FileName 'fake.png' -ContentType 'image/png' -Token $token4
 Write-Output ("  status={0} body={1}" -f $rejected.Status, $rejected.Text)
@@ -322,7 +352,7 @@ Check 'non-image rejected by magic bytes' ($rejected.Status -eq 400) $rejected.T
 $anon = Call-Upload -Path '/api/auth/avatar' -Bytes $png -FileName 'a.png' -ContentType 'image/png' -Token ''
 Check 'anonymous upload rejected' ($anon.Status -eq 401) $anon.Text
 
-# 清空头像后，R2 里的旧对象应该被删掉
+# After clearing the avatar, the old R2 object should be gone
 $cleared = Call-Api -Method PATCH -Path '/api/auth/profile' -Token $token4 -Body @{
   displayName = '头像测试'
   avatarUrl   = ''

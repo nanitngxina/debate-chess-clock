@@ -370,7 +370,18 @@ async function handleUpdateProfile(request: Request, env: WorkerEnv): Promise<Re
 
   const accountId = resolved.account.account_id;
   const previousAvatarUrl = resolved.account.avatar_url;
+  const rawAvatarUrl = String(payload.avatarUrl ?? "").trim();
   const nextAvatarUrl = sanitizeAvatarUrl(payload.avatarUrl);
+
+  // 传了非空头像地址、但校验后什么都不剩 —— 说明这个地址不合法
+  // （比如内联图片超过上限、协议不对）。这时必须明确报错，
+  // 而不是静默存成空值：那会把用户已有的头像悄悄清掉，且没有任何提示。
+  if (rawAvatarUrl && !nextAvatarUrl) {
+    return json(
+      { error: "头像地址不合法：内联图片过大，或不是受支持的图片地址" },
+      400,
+    );
+  }
 
   await updateAccountProfile(env.DB, accountId, displayName, nextAvatarUrl);
 

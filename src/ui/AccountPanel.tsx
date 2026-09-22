@@ -22,6 +22,13 @@ const UPLOAD_AVATAR_ID = "upload";
 const NO_AVATAR_ID = "none";
 const FALLBACK_DISPLAY_NAME = "未命名旅人";
 
+/**
+ * 与服务端 MAX_INLINE_AVATAR_LENGTH 保持一致。
+ * 超过这个长度的内联图片服务端会直接丢弃（旧版本会把上传的 JPEG 存成 data URL，
+ * 而一张 256×256 的 JPEG 转成 data URL 有 7000+ 字符，本来就存不住）。
+ */
+const INLINE_AVATAR_LIMIT = 5000;
+
 export function AccountPanel({
   account,
   saving,
@@ -51,10 +58,17 @@ export function AccountPanel({
 
   useEffect(() => {
     const nextDisplayName = account.displayName ?? "";
-    const nextAvatarUrl = account.avatarUrl ?? "";
+    const rawAvatarUrl = account.avatarUrl ?? "";
+
+    // 旧版本把上传的图片存成 data URL，而服务端存不住（超过上限会被丢弃），
+    // 那些值其实是坏图，直接当作"没有头像"处理，界面才对得上服务端的行为。
+    const isLegacyInlineOverflow =
+      rawAvatarUrl.startsWith("data:image/") && rawAvatarUrl.length > INLINE_AVATAR_LIMIT;
+    const nextAvatarUrl = isLegacyInlineOverflow ? "" : rawAvatarUrl;
+
     const matchedPreset = findAvatarPresetByUrl(nextAvatarUrl);
-    // 上传的头像现在是一个 R2 相对地址；
-    // data:image/ 只用于兼容以前存下的历史值（预设 SVG 会先被 matchedPreset 认出来）。
+    // 上传的头像现在是一个 R2 相对地址；data:image/ 只用于兼容历史值（预设 SVG 会先被
+    // matchedPreset 认出来）。
     const isUploadedAvatar =
       nextAvatarUrl.startsWith("/api/avatars/") || nextAvatarUrl.startsWith("data:image/");
 
@@ -68,12 +82,18 @@ export function AccountPanel({
           ? UPLOAD_AVATAR_ID
           : nextAvatarUrl
             ? CUSTOM_AVATAR_ID
-            : ACCOUNT_AVATAR_PRESETS[0]?.id ?? CUSTOM_AVATAR_ID),
+            : isLegacyInlineOverflow
+              ? NO_AVATAR_ID
+              : ACCOUNT_AVATAR_PRESETS[0]?.id ?? CUSTOM_AVATAR_ID),
     );
     setAvatarError(null);
   }, [account]);
 
-  const resolvedAvatarUrl = useMemo(() => {
+  /**
+   * 界面上用来显示的地址。包含本地上传时的临时预览图
+   * （data URL，只在浏览器里用，绝不会提交给服务端）。
+   */
+  const displayAvatarUrl = useMemo(() => {
     if (avatarChoice === NO_AVATAR_ID) {
       return "";
     }
@@ -90,10 +110,50 @@ export function AccountPanel({
     return ACCOUNT_AVATAR_PRESETS.find((preset) => preset.id === avatarChoice)?.avatarUrl ?? "";
   }, [avatarChoice, customAvatarUrl, uploadedAvatarUrl, uploadPreviewUrl]);
 
+  /**
+   * 真正要保存进账号的地址。
+   * 关键：上传头像时这里只认服务端返回的 R2 地址，
+   * **永远不会**是本地预览图 —— 否则保存的会是一串服务端存不下的 data URL，
+   * 结果头像被清空成首字母头像。
+   */
+  const avatarUrlToSave = useMemo(() => {
+    if (avatarChoice === NO_AVATAR_ID) {
+      return "";
+    }
+
+    if (avatarChoice === CUSTOM_AVATAR_ID) {
+      return customAvatarUrl.trim();
+    }
+
+    if (avatarChoice === UPLOAD_AVATAR_ID) {
+      return uploadedAvatarUrl;
+    }
+
+    return ACCOUNT_AVATAR_PRESETS.find((preset) => preset.id === avatarChoice)?.avatarUrl ?? "";
+  }, [avatarChoice, customAvatarUrl, uploadedAvatarUrl]);
+
   const previewName = displayName.trim() || account.displayName || FALLBACK_DISPLAY_NAME;
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
+    setAvatarError(null);
+
+    // 选了「上传头像」但图片还没传完（或传失败了）时不能提交：
+    // 否则会把空地址存进账号，把已有头像清掉。
+    if (avatarChoice === UPLOAD_AVATAR_ID && !uploadedAvatarUrl) {
+      setAvatarError(
+        uploadingAvatar ? "头像还在上传中，请稍等一下再保存" : "头像还没上传成功，请重新选择图片",
+      );
+      return;
+    }
+
+    // 兜底：本地预览图（data URL）绝不能进入保存流程。
+    // 服务端存不下这么长的内联图片会直接拒绝，绝不希望这种值被提交上去。
+    // 正常流程下 avatarUrlToSave 已经是 R2 短地址，这里只是防止以后又被接错。
+    if (avatarUrlToSave.startsWith("data:") && avatarUrlToSave.length > INLINE_AVATAR_LIMIT) {
+      setAvatarError("头像还没上传成功，请重新选择图片再保存");
+      return;
+    }
 
     const normalizedDisplayName = displayName.trim() || account.displayName?.trim() || FALLBACK_DISPLAY_NAME;
     if (!displayName.trim()) {
@@ -102,7 +162,7 @@ export function AccountPanel({
 
     void onUpdateProfile({
       displayName: normalizedDisplayName,
-      avatarUrl: resolvedAvatarUrl,
+      avatarUrl: avatarUrlToSave,
     }).catch(() => {
       // 错误已由 session hook 记录
     });
@@ -163,6 +223,8 @@ export function AccountPanel({
         // 图片本体传到服务端 R2，只把返回的短 URL 留在账号里
         const avatarUrl = await onUploadAvatar(prepared.blob);
         setUploadedAvatarUrl(avatarUrl);
+        // 上传成功后立刻丢掉本地预览图：它只是 data URL，留着有可能被误当成要保存的值
+        setUploadPreviewUrl("");
       })
       .catch((uploadError) => {
         setAvatarError(uploadError instanceof Error ? uploadError.message : "头像上传失败");
@@ -198,13 +260,13 @@ export function AccountPanel({
           <div className="account-panel__preview account-panel__preview--game">
             <AccountAvatar
               displayName={previewName}
-              avatarUrl={resolvedAvatarUrl}
+              avatarUrl={displayAvatarUrl}
               className="account-avatar--hero"
             />
             <div className="account-panel__preview-copy">
               <span className="account-panel__preview-label">出场档案</span>
               <strong>{previewName}</strong>
-              <span>{resolvedAvatarUrl ? "已完成形象设定" : "请选择一个头像形象"}</span>
+              <span>{displayAvatarUrl ? "已完成形象设定" : "请选择一个头像形象"}</span>
             </div>
           </div>
 
