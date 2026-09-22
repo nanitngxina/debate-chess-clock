@@ -126,20 +126,29 @@ export default function App() {
       )}
 
       {showAccountEditor && session.account && (
-        <div className="account-modal">
-          <AccountPanel
-            account={session.account}
-            saving={session.saving}
-            error={session.error}
-            onUpdateProfile={session.updateProfile}
-            onUploadAvatar={session.uploadAvatar}
-            onChangePassword={session.changePassword}
-            onLogout={async () => {
-              await session.logout();
+        <div
+          className="modal-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
               setShowAccountEditor(false);
-            }}
-            onClose={() => setShowAccountEditor(false)}
-          />
+            }
+          }}
+        >
+          <div className="modal">
+            <AccountPanel
+              account={session.account}
+              saving={session.saving}
+              error={session.error}
+              onUpdateProfile={session.updateProfile}
+              onUploadAvatar={session.uploadAvatar}
+              onChangePassword={session.changePassword}
+              onLogout={async () => {
+                await session.logout();
+                setShowAccountEditor(false);
+              }}
+              onClose={() => setShowAccountEditor(false)}
+            />
+          </div>
         </div>
       )}
     </div>

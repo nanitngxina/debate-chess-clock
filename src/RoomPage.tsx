@@ -132,6 +132,8 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
   const [draftSeedRoomId, setDraftSeedRoomId] = useState("");
   const [barrageItems, setBarrageItems] = useState<BarrageMessage[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [banner, setBanner] = useState<string | null>(null);
+  const previousRoundRef = useRef<number | null>(null);
   const hasObservedClockRef = useRef(false);
   const previousRemainingRef = useRef<{ affirmative: number; negative: number } | null>(null);
   const accountDisplayName = account?.displayName ?? "";
@@ -200,6 +202,43 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
 
     previousRemainingRef.current = nextRemaining;
   }, [liveClock, payload]);
+
+  // 回合变化时给出一次短暂的横幅（ROUND 03 · +30s），把"回合结束 / 自动加时"显性化
+  useEffect(() => {
+    if (!payload) {
+      return;
+    }
+
+    const round = payload.room.clock.currentRound;
+
+    if (previousRoundRef.current === null) {
+      previousRoundRef.current = round;
+      return;
+    }
+
+    if (round === previousRoundRef.current) {
+      return;
+    }
+
+    previousRoundRef.current = round;
+
+    const latest = payload.room.roundHistory[0];
+    const bonus = latest && latest.bonusSeconds > 0 ? ` · +${latest.bonusSeconds}s` : "";
+    setBanner(`Round ${String(round).padStart(2, "0")}${bonus}`);
+  }, [payload]);
+
+  // 横幅只停留一小会儿
+  useEffect(() => {
+    if (!banner) {
+      return;
+    }
+
+    const id = setTimeout(() => setBanner(null), 2200);
+    return () => clearTimeout(id);
+  }, [banner]);
+
+  // 切换发言方时给出 SWITCHING 状态
+  const timerBanner = pendingAction === "switch" ? "Switching…" : banner;
 
   const runCommand = async (command: RoomCommand, actionKey: string) => {
     setPendingAction(actionKey);
@@ -319,6 +358,7 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
             roundLabel={`第 ${clock.currentRound} 回合`}
             totalLabel={formatDurationFromMs(clock.totalRemainingMs)}
             sides={buildSides(room, clock)}
+            banner={timerBanner}
             statusExtra={<span>{clock.isRunning ? "Running" : "Paused"}</span>}
           />
 
@@ -692,6 +732,11 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
   /* ------------------------------------------------------ 辩手 / 观众 */
 
   const soloSide = mySide ?? "affirmative";
+  // 辩手视图只看自己一方，所以"计时中"要说成"轮到你发言"
+  const soloSides = buildSides(room, clock, soloSide);
+  if (soloSides[0]?.active) {
+    soloSides[0].statusLabel = "轮到你发言";
+  }
 
   return (
     <div className={`room ${isViewer ? "room--viewer" : "room--debater"}`}>
@@ -706,6 +751,7 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
             roundLabel={`第 ${clock.currentRound} 回合`}
             totalLabel={formatDurationFromMs(clock.totalRemainingMs)}
             sides={buildSides(room, clock)}
+            banner={timerBanner}
             foot={
               <div className="row row--wrap">
                 {clock.activeSide && (
@@ -726,7 +772,8 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
               isLive={clock.isRunning}
               roundLabel={`第 ${clock.currentRound} 回合`}
               totalLabel={formatDurationFromMs(clock.totalRemainingMs)}
-              sides={buildSides(room, clock, soloSide)}
+              sides={soloSides}
+              banner={timerBanner}
               foot={
                 <span className="dim">
                   对手剩余{" "}

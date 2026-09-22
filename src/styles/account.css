@@ -117,6 +117,33 @@
   border-color: var(--warn);
 }
 
+/* 账号设置弹层的标题 */
+.account-head {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.account-head__title {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+/* 头像区块 */
+.account-avatars {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+/* 弹层内的分块（比如修改密码），用分割线隔开 */
+.form-block {
+  display: grid;
+  gap: var(--sp-4);
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--border);
+}
+
 /* ---------------------------------------------------------------------------
    账号设置面板
    --------------------------------------------------------------------------- */

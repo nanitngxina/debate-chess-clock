@@ -15,6 +15,7 @@ import { GuidePage } from "../src/pages/GuidePage";
 import { MarketingPage } from "../src/MarketingPage";
 import { RoomPage } from "../src/RoomPage";
 import { AppHeader } from "../src/ui/AppHeader";
+import { AccountPanel } from "../src/ui/AccountPanel";
 import { AuthPanel } from "../src/ui/AuthPanel";
 import { BarragePanel } from "../src/ui/BarragePanel";
 import { TimerLab } from "../src/ui/TimerLab";
@@ -215,6 +216,33 @@ const cases: Case[] = [
         }),
       ),
     expect: ["Voice", "公共语音", "已加入", "主持人", "开麦中"],
+  },
+  {
+    name: "account-panel",
+    render: () =>
+      renderToString(
+        createElement(AccountPanel, {
+          account: fakeAccount,
+          saving: false,
+          error: null,
+          onUpdateProfile: async () => undefined,
+          onUploadAvatar: async () => "",
+          onChangePassword: async () => undefined,
+          onLogout: async () => undefined,
+          onClose: noop,
+        }),
+      ),
+    expect: [
+      "编辑出场档案",
+      "出场名称",
+      "上传头像",
+      "不使用头像",
+      "保存档案",
+      "修改密码",
+      "退出登录",
+      "邮箱已验证",
+      "测试选手",
+    ],
   },
   {
     name: "room-invalid-link",

@@ -3,7 +3,6 @@ import { findAvatarPresetByUrl, ACCOUNT_AVATAR_PRESETS } from "../lib/accountAva
 import { prepareAvatarUpload } from "../lib/accountAvatarUpload";
 import { AccountProfile, ChangePasswordInput, ProfileInput } from "../shared/types";
 import { AccountAvatar } from "./AccountAvatar";
-import "./AccountPanel.css";
 
 interface AccountPanelProps {
   account: AccountProfile;
@@ -41,7 +40,9 @@ export function AccountPanel({
 }: AccountPanelProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [displayName, setDisplayName] = useState("");
-  const [avatarChoice, setAvatarChoice] = useState<string>(ACCOUNT_AVATAR_PRESETS[0]?.id ?? CUSTOM_AVATAR_ID);
+  const [avatarChoice, setAvatarChoice] = useState<string>(
+    ACCOUNT_AVATAR_PRESETS[0]?.id ?? CUSTOM_AVATAR_ID,
+  );
   const [customAvatarUrl, setCustomAvatarUrl] = useState("");
   const [uploadedAvatarUrl, setUploadedAvatarUrl] = useState("");
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState("");
@@ -67,7 +68,7 @@ export function AccountPanel({
     const nextAvatarUrl = isLegacyInlineOverflow ? "" : rawAvatarUrl;
 
     const matchedPreset = findAvatarPresetByUrl(nextAvatarUrl);
-    // 上传的头像现在是一个 R2 相对地址；data:image/ 只用于兼容历史值（预设 SVG 会先被
+    // 头像现在是一个 R2 相对地址；data:image/ 只用于兼容历史值（预设 SVG 会先被
     // matchedPreset 认出来）。
     const isUploadedAvatar =
       nextAvatarUrl.startsWith("/api/avatars/") || nextAvatarUrl.startsWith("data:image/");
@@ -89,10 +90,7 @@ export function AccountPanel({
     setAvatarError(null);
   }, [account]);
 
-  /**
-   * 界面上用来显示的地址。包含本地上传时的临时预览图
-   * （data URL，只在浏览器里用，绝不会提交给服务端）。
-   */
+  /** 界面上用来显示的地址（含本地上传时的临时预览图） */
   const displayAvatarUrl = useMemo(() => {
     if (avatarChoice === NO_AVATAR_ID) {
       return "";
@@ -103,7 +101,6 @@ export function AccountPanel({
     }
 
     if (avatarChoice === UPLOAD_AVATAR_ID) {
-      // 上传完成前先用本地预览图，避免界面闪一下空白
       return uploadPreviewUrl || uploadedAvatarUrl;
     }
 
@@ -112,9 +109,7 @@ export function AccountPanel({
 
   /**
    * 真正要保存进账号的地址。
-   * 关键：上传头像时这里只认服务端返回的 R2 地址，
-   * **永远不会**是本地预览图 —— 否则保存的会是一串服务端存不下的 data URL，
-   * 结果头像被清空成首字母头像。
+   * 关键：上传头像时这里只认服务端返回的 R2 地址，**永远不会**是本地预览图。
    */
   const avatarUrlToSave = useMemo(() => {
     if (avatarChoice === NO_AVATAR_ID) {
@@ -148,14 +143,13 @@ export function AccountPanel({
     }
 
     // 兜底：本地预览图（data URL）绝不能进入保存流程。
-    // 服务端存不下这么长的内联图片会直接拒绝，绝不希望这种值被提交上去。
-    // 正常流程下 avatarUrlToSave 已经是 R2 短地址，这里只是防止以后又被接错。
     if (avatarUrlToSave.startsWith("data:") && avatarUrlToSave.length > INLINE_AVATAR_LIMIT) {
       setAvatarError("头像还没上传成功，请重新选择图片再保存");
       return;
     }
 
-    const normalizedDisplayName = displayName.trim() || account.displayName?.trim() || FALLBACK_DISPLAY_NAME;
+    const normalizedDisplayName =
+      displayName.trim() || account.displayName?.trim() || FALLBACK_DISPLAY_NAME;
     if (!displayName.trim()) {
       setDisplayName(normalizedDisplayName);
     }
@@ -238,116 +232,117 @@ export function AccountPanel({
   };
 
   return (
-    <section className="card account-panel account-panel--modal">
-      <div className="account-panel__hero">
-        <div>
-          <span className="card__eyebrow">账号设置</span>
-          <h2>编辑出场档案</h2>
-          <p>
-            {account.email}
-            <span className={`account-badge ${account.emailVerified ? "account-badge--ok" : ""}`}>
-              {account.emailVerified ? "邮箱已验证" : "邮箱未验证"}
-            </span>
-          </p>
+    <>
+      <div className="modal__head">
+        <div className="account-head">
+          <span className="u-label">Account</span>
+          <span className="account-head__title">编辑出场档案</span>
         </div>
-        <button type="button" className="button button--ghost" onClick={onClose}>
-          关闭
+        <button type="button" className="btn btn--quiet btn--icon" aria-label="关闭" onClick={onClose}>
+          ✕
         </button>
       </div>
 
-      <form className="account-panel__form" onSubmit={handleSubmit}>
-        <div className="account-panel__stage">
-          <div className="account-panel__preview account-panel__preview--game">
-            <AccountAvatar
-              displayName={previewName}
-              avatarUrl={displayAvatarUrl}
-              className="account-avatar--hero"
-            />
-            <div className="account-panel__preview-copy">
-              <span className="account-panel__preview-label">出场档案</span>
-              <strong>{previewName}</strong>
-              <span>{displayAvatarUrl ? "已完成形象设定" : "请选择一个头像形象"}</span>
+      <div className="modal__body">
+        <div className="account-grid">
+          {/* 左：实时预览 */}
+          <div className="account-preview">
+            <div className="account-preview__figure">
+              <AccountAvatar
+                displayName={previewName}
+                avatarUrl={displayAvatarUrl}
+                className="avatar avatar--xl"
+              />
+              <span className="account-preview__name">{previewName}</span>
+              <span className="dim">{account.email}</span>
+              <span className={`pill ${account.emailVerified ? "pill--live" : "pill--warn"}`}>
+                {account.emailVerified ? "邮箱已验证" : "邮箱未验证"}
+              </span>
             </div>
           </div>
 
-          <div className="account-panel__builder">
-            <label>
-              出场名称
+          {/* 右：表单 */}
+          <form id="account-form" className="account-form" onSubmit={handleSubmit}>
+            <label className="field">
+              <span className="field__label">出场名称</span>
               <input
+                className="input"
                 type="text"
                 maxLength={20}
                 value={displayName}
                 placeholder="例如：菲比啾比,菲八啾比，糯糯"
                 onChange={(event) => setDisplayName(event.target.value)}
               />
+              <span className="field__hint">比赛中显示的名字，最长 20 字</span>
             </label>
 
-            <div className="account-panel__section">
-              <div className="account-panel__section-header">
-                <strong>选择头像</strong>
-                <span>可以直接选预设，也可以从你的电脑上传图片</span>
-              </div>
+            <div className="account-avatars">
+              <span className="field__label">头像</span>
 
-              <div className="avatar-grid">
-                {ACCOUNT_AVATAR_PRESETS.map((preset) => {
-                  const active = avatarChoice === preset.id;
-
-                  return (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      className={`avatar-option ${active ? "avatar-option--active" : ""}`}
-                      onClick={() => setAvatarChoice(preset.id)}
-                    >
-                      <AccountAvatar
-                        displayName={preset.label}
-                        avatarUrl={preset.avatarUrl}
-                        className="account-avatar--option"
-                      />
-                      <strong>{preset.label}</strong>
-                      <span>{preset.summary}</span>
-                    </button>
-                  );
-                })}
+              <div className="avatar-options">
+                {ACCOUNT_AVATAR_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={`avatar-option ${
+                      avatarChoice === preset.id ? "avatar-option--active" : ""
+                    }`}
+                    onClick={() => setAvatarChoice(preset.id)}
+                  >
+                    <AccountAvatar
+                      displayName={preset.label}
+                      avatarUrl={preset.avatarUrl}
+                      className="avatar avatar--lg"
+                    />
+                    <span className="avatar-option__label">{preset.label}</span>
+                    <span className="avatar-option__note">{preset.summary}</span>
+                  </button>
+                ))}
 
                 <button
                   type="button"
-                  className={`avatar-option ${avatarChoice === UPLOAD_AVATAR_ID ? "avatar-option--active" : ""}`}
+                  className={`avatar-option ${
+                    avatarChoice === UPLOAD_AVATAR_ID ? "avatar-option--active" : ""
+                  }`}
                   onClick={handleUploadClick}
                 >
                   {uploadingAvatar ? (
-                    <span className="account-avatar account-avatar--option account-avatar--custom">…</span>
+                    <span className="avatar-option__glyph">…</span>
                   ) : uploadedAvatarUrl || uploadPreviewUrl ? (
                     <AccountAvatar
                       displayName={previewName}
                       avatarUrl={uploadPreviewUrl || uploadedAvatarUrl}
-                      className="account-avatar--option"
+                      className="avatar avatar--lg"
                     />
                   ) : (
-                    <span className="account-avatar account-avatar--option account-avatar--custom">+</span>
+                    <span className="avatar-option__glyph">+</span>
                   )}
-                  <strong>上传头像</strong>
-                  <span>从本地选择图片并自动裁成头像</span>
+                  <span className="avatar-option__label">上传头像</span>
+                  <span className="avatar-option__note">从本地选图并自动裁成头像</span>
                 </button>
 
                 <button
                   type="button"
-                  className={`avatar-option ${avatarChoice === CUSTOM_AVATAR_ID ? "avatar-option--active" : ""}`}
+                  className={`avatar-option ${
+                    avatarChoice === CUSTOM_AVATAR_ID ? "avatar-option--active" : ""
+                  }`}
                   onClick={() => setAvatarChoice(CUSTOM_AVATAR_ID)}
                 >
-                  <span className="account-avatar account-avatar--option account-avatar--custom">#</span>
-                  <strong>图片链接</strong>
-                  <span>备用方式，使用外部图片地址</span>
+                  <span className="avatar-option__glyph">#</span>
+                  <span className="avatar-option__label">图片链接</span>
+                  <span className="avatar-option__note">使用外部图片地址</span>
                 </button>
 
                 <button
                   type="button"
-                  className={`avatar-option ${avatarChoice === NO_AVATAR_ID ? "avatar-option--active" : ""}`}
+                  className={`avatar-option ${
+                    avatarChoice === NO_AVATAR_ID ? "avatar-option--active" : ""
+                  }`}
                   onClick={() => setAvatarChoice(NO_AVATAR_ID)}
                 >
-                  <span className="account-avatar account-avatar--option account-avatar--custom">∅</span>
-                  <strong>不使用头像</strong>
-                  <span>只用名字首字母生成头像</span>
+                  <span className="avatar-option__glyph">∅</span>
+                  <span className="avatar-option__label">不使用头像</span>
+                  <span className="avatar-option__note">只用名字首字母</span>
                 </button>
               </div>
 
@@ -355,22 +350,23 @@ export function AccountPanel({
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                className="account-panel__file-input"
+                className="file-input"
                 onChange={handleAvatarFileChange}
               />
 
-              {uploadingAvatar && <p className="account-panel__upload-tip">正在上传头像…</p>}
+              {uploadingAvatar && <p className="field__hint">正在上传头像…</p>}
 
               {!uploadingAvatar && avatarChoice === UPLOAD_AVATAR_ID && (
-                <p className="account-panel__upload-tip">
-                  已启用本地上传头像。再次点击“上传头像”可以替换图片，记得点“保存档案”才会生效。
+                <p className="field__hint">
+                  再次点击「上传头像」可以替换图片，记得保存后才会生效。
                 </p>
               )}
 
               {avatarChoice === CUSTOM_AVATAR_ID && (
-                <label className="account-panel__custom">
-                  自定义头像链接
+                <label className="field">
+                  <span className="field__label">自定义头像链接</span>
                   <input
+                    className="input"
                     type="url"
                     value={customAvatarUrl}
                     placeholder="https://example.com/avatar.png"
@@ -381,88 +377,99 @@ export function AccountPanel({
 
               {avatarError && <p className="feedback feedback--error">{avatarError}</p>}
             </div>
-          </div>
+          </form>
         </div>
 
-        <div className="account-panel__actions">
-          <button type="submit" className="button" disabled={saving || uploadingAvatar}>
-            {saving ? "保存中..." : "保存档案"}
-          </button>
-          <button
-            type="button"
-            className="button button--ghost"
-            disabled={saving}
-            onClick={() => {
-              setShowPasswordForm((previous) => !previous);
-              setPasswordError(null);
-              setPasswordNotice(null);
-            }}
-          >
-            修改密码
-          </button>
-          <button
-            type="button"
-            className="button button--ghost"
-            disabled={saving}
-            onClick={() => {
-              void onLogout();
-            }}
-          >
-            退出登录
-          </button>
-        </div>
-      </form>
+        {showPasswordForm && (
+          <form className="form-block" onSubmit={handleChangePassword}>
+            <div className="row row--between row--wrap">
+              <span className="u-label">修改密码</span>
+              <span className="dim">修改后其他设备上的登录会被自动登出</span>
+            </div>
 
-      {showPasswordForm && (
-        <form className="account-panel__password" onSubmit={handleChangePassword}>
-          <div className="account-panel__section-header">
-            <strong>修改密码</strong>
-            <span>修改后，其他设备上的登录会被自动登出</span>
-          </div>
+            <label className="field">
+              <span className="field__label">当前密码</span>
+              <input
+                className="input"
+                type="password"
+                value={currentPassword}
+                autoComplete="current-password"
+                onChange={(event) => setCurrentPassword(event.target.value)}
+              />
+            </label>
 
-          <label>
-            当前密码
-            <input
-              type="password"
-              value={currentPassword}
-              autoComplete="current-password"
-              onChange={(event) => setCurrentPassword(event.target.value)}
-            />
-          </label>
+            <div className="field-grid">
+              <label className="field">
+                <span className="field__label">新密码</span>
+                <input
+                  className="input"
+                  type="password"
+                  value={newPassword}
+                  autoComplete="new-password"
+                  placeholder="至少 8 位，含字母和数字"
+                  onChange={(event) => setNewPassword(event.target.value)}
+                />
+              </label>
 
-          <label>
-            新密码
-            <input
-              type="password"
-              value={newPassword}
-              autoComplete="new-password"
-              placeholder="至少 8 位，含字母和数字"
-              onChange={(event) => setNewPassword(event.target.value)}
-            />
-          </label>
+              <label className="field">
+                <span className="field__label">确认新密码</span>
+                <input
+                  className="input"
+                  type="password"
+                  value={confirmPassword}
+                  autoComplete="new-password"
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                />
+              </label>
+            </div>
 
-          <label>
-            确认新密码
-            <input
-              type="password"
-              value={confirmPassword}
-              autoComplete="new-password"
-              onChange={(event) => setConfirmPassword(event.target.value)}
-            />
-          </label>
+            <div className="row">
+              <button type="submit" className="btn" disabled={saving}>
+                {saving ? "提交中…" : "确认修改"}
+              </button>
+            </div>
 
-          <div className="account-panel__actions">
-            <button type="submit" className="button" disabled={saving}>
-              {saving ? "提交中..." : "确认修改"}
-            </button>
-          </div>
+            {passwordNotice && <p className="feedback feedback--success">{passwordNotice}</p>}
+            {passwordError && <p className="feedback feedback--error">{passwordError}</p>}
+          </form>
+        )}
 
-          {passwordNotice && <p className="feedback feedback--success">{passwordNotice}</p>}
-          {passwordError && <p className="feedback feedback--error">{passwordError}</p>}
-        </form>
-      )}
+        {error && <p className="feedback feedback--error">{error}</p>}
+      </div>
 
-      {error && <p className="feedback feedback--error">{error}</p>}
-    </section>
+      <div className="modal__foot">
+        <button
+          type="submit"
+          form="account-form"
+          className="btn btn--primary"
+          disabled={saving || uploadingAvatar}
+        >
+          {saving ? "保存中…" : "保存档案"}
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost"
+          disabled={saving}
+          onClick={() => {
+            setShowPasswordForm((previous) => !previous);
+            setPasswordError(null);
+            setPasswordNotice(null);
+          }}
+        >
+          修改密码
+        </button>
+        <span className="spacer" />
+        <button
+          type="button"
+          className="btn btn--quiet"
+          disabled={saving}
+          onClick={() => {
+            void onLogout();
+          }}
+        >
+          退出登录
+        </button>
+      </div>
+    </>
   );
 }

@@ -1,9 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 // 样式导入顺序在这里统一定义，不要在组件里分散 import —— 顺序错了会被静默覆盖。
-// 迁移期说明：index.css 是旧样式，正在逐页替换，全部迁完就删掉；
-// styles/* 是新的 Design System（tokens -> base -> components -> 各页面）。
-import "./index.css";
+// 顺序：变量 → 基础 → 通用组件 → 外壳 → 计时器 → 编辑型页面 → 账号 → 首页 → 控制台 → 房间
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/components.css";

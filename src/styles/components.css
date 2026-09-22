@@ -410,6 +410,19 @@
   cursor: pointer;
 }
 
+/* 两列表单：窄屏自动堆叠 */
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+@media (max-width: 720px) {
+  .field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ---------------------------------------------------------------------------
    数据行 / 说明列表（用分割线而不是卡片）
    --------------------------------------------------------------------------- */
