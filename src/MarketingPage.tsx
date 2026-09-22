@@ -114,7 +114,7 @@ export function MarketingPage({ onNavigate, onJoinRoom }: MarketingPageProps) {
         </div>
 
         <div className="container hero__inner">
-          <div className="hero__content">
+          <div className="hero__intro">
             <span className="u-label">Online Debate Timer</span>
             <h1 className="hero__title">八角笼</h1>
             <p className="hero__lead">
@@ -122,15 +122,9 @@ export function MarketingPage({ onNavigate, onJoinRoom }: MarketingPageProps) {
               <br />
               拥有一个共同的时间。
             </p>
-            <p className="hero__roles">主持人 · 正方 · 反方 · 观众</p>
+          </div>
 
-            <ul className="hero__facts">
-              <li>实时同步</li>
-              <li>多端可用</li>
-              <li>语音互动</li>
-              <li>弹幕交流</li>
-            </ul>
-
+          <div className="hero__aside">
             <div className="hero__actions">
               <button
                 type="button"
@@ -171,11 +165,20 @@ export function MarketingPage({ onNavigate, onJoinRoom }: MarketingPageProps) {
             {joinError && <p className="feedback feedback--error">{joinError}</p>}
           </div>
 
+          {/* 棋钟通栏铺满：只有这么宽，两侧的巨大数字才放得下、不会互相挤压 */}
           <div className="hero__clock">
             <HeroClock />
-            <p className="hero__clock-caption">
-              <span className="dim">房间内所有设备看到的是同一个时间 · 上图为实时演示</span>
-            </p>
+          </div>
+
+          <div className="hero__meta">
+            <p className="hero__roles">主持人 · 正方 · 反方 · 观众</p>
+            <ul className="hero__facts">
+              <li>实时同步</li>
+              <li>多端可用</li>
+              <li>语音互动</li>
+              <li>弹幕交流</li>
+            </ul>
+            <span className="dim">房间内所有设备看到的是同一个时间 · 上方为实时演示</span>
           </div>
         </div>
       </section>

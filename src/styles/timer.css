@@ -44,6 +44,14 @@
   font-size: var(--fs-xs);
 }
 
+/* 状态条右侧的实时北京时间 */
+.timer-lab__clock {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--text-muted);
+}
+
 /* --- 计时主体：左右两块，中间一条细线 -------------------------------- */
 
 .timer-board {
@@ -61,6 +69,8 @@
   gap: var(--sp-4);
   padding: var(--sp-5) var(--sp-5) var(--sp-4);
   min-width: 0;
+  /* 让内部能用 cqw 按"本列宽度"给数字定字号，从而保证永远放得下 */
+  container-type: inline-size;
 }
 
 /* 每块侧别的主题色走局部变量，下面所有细节都引用它 */
@@ -106,7 +116,14 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1, "zero" 1;
-  font-size: var(--fs-timer);
+  /* 兜底：不支持容器查询的浏览器用这一行 */
+  font-size: 3.25rem;
+  /*
+   * 按所在列的宽度自适应 —— 这是关键。
+   * 等宽字体每字符约 0.6em，MM:SS.CC 共 8 字符 ≈ 4.8em，
+   * 所以 16cqw 只占列宽的 ~77%，任何宽度下都不会溢出、更不会和另一侧挤在一起。
+   */
+  font-size: clamp(2rem, 16cqw, 5.25rem);
   font-weight: 500;
   line-height: 0.94;
   letter-spacing: -0.02em;
@@ -145,6 +162,55 @@
 /* 时间用完 / 回合结束：数字回到暗色，不再抢焦点 */
 .side--done .side__digits {
   color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   紧迫状态：最后 30 秒转琥珀、最后 10 秒转红并开始呼吸
+   --------------------------------------------------------------------------- */
+
+.side--urgent .side__digits {
+  color: var(--warn);
+}
+
+.side--urgent .side__bar-fill {
+  background: var(--warn);
+  opacity: 1;
+}
+
+.side--critical .side__digits {
+  color: var(--negative);
+}
+
+.side--critical .side__bar-fill {
+  background: var(--negative);
+  opacity: 1;
+}
+
+/* 顶部身份色线在紧迫时让位给警示色（警戒色比身份更重要） */
+.side--urgent:not(.side--critical) {
+  box-shadow: inset 0 2px 0 0 var(--warn);
+}
+
+.side--critical {
+  box-shadow: inset 0 2px 0 0 var(--negative);
+}
+
+.side--urgent:not(.side--critical) .side__digits {
+  animation: digits-pulse 1.8s var(--ease) infinite;
+}
+
+.side--critical .side__digits {
+  animation: digits-pulse 0.9s var(--ease) infinite;
+}
+
+@keyframes digits-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.78;
+  }
 }
 
 .side__bar {
@@ -210,9 +276,10 @@
 
 /* --- 尺寸变体 --------------------------------------------------------- */
 
-/* 首页 Hero：独占一块，数字最大 */
+/* 首页 Hero：独占一整条，数字最大 */
 .timer-lab--hero .side__digits {
-  font-size: var(--fs-timer-lg);
+  font-size: 4rem;
+  font-size: clamp(2.5rem, 16cqw, 6.75rem);
 }
 
 .timer-lab--hero .side {
@@ -221,12 +288,14 @@
 
 /* 房间页：在信息较多的环境里略小一号 */
 .timer-lab--room .side__digits {
-  font-size: var(--fs-timer);
+  font-size: 3.25rem;
+  font-size: clamp(2rem, 16cqw, 5.25rem);
 }
 
 /* 辩手极简视图：只有自己一方，数字最大 */
 .timer-lab--solo .side__digits {
-  font-size: var(--fs-timer-lg);
+  font-size: 4rem;
+  font-size: clamp(2.5rem, 16cqw, 6.75rem);
 }
 
 /* --- 响应式：手机上下排列，数字依然要很大 ---------------------------- */
@@ -246,11 +315,6 @@
     gap: var(--sp-3);
   }
 
-  .side__digits,
-  .timer-lab--hero .side__digits {
-    font-size: var(--fs-timer-sm);
-  }
-
   .timer-lab__status {
     gap: var(--sp-2) var(--sp-3);
   }
@@ -260,9 +324,4 @@
   }
 }
 
-@media (max-width: 420px) {
-  .side__digits,
-  .timer-lab--hero .side__digits {
-    font-size: clamp(2.25rem, 11vw, 3rem);
-  }
-}
+/* 窄屏下数字由 cqw 自动适配，这里不再覆盖字号 */

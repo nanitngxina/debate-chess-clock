@@ -14,6 +14,10 @@ export interface TimerSideView {
   active: boolean;
   /** 时间已用完 / 回合已结束 */
   done?: boolean;
+  /** 剩余时间进入警戒区（默认 ≤30 秒） */
+  urgent?: boolean;
+  /** 剩余时间进入危急区（默认 ≤10 秒） */
+  critical?: boolean;
   /** 覆盖默认状态文字 */
   statusLabel?: string;
 }
@@ -39,8 +43,32 @@ export interface TimerLabProps {
   banner?: string | null;
 }
 
+/** 剩余时间进入警戒 / 危急区的阈值（整场比赛的最后阶段） */
+export const URGENT_THRESHOLD_MS = 30_000;
+export const CRITICAL_THRESHOLD_MS = 10_000;
+
+/** 按剩余时间判断紧迫程度；已归零不算紧迫（那是"回合结束"） */
+export function urgencyFor(remainingMs: number): { urgent: boolean; critical: boolean } {
+  if (remainingMs <= 0) {
+    return { urgent: false, critical: false };
+  }
+
+  return {
+    critical: remainingMs <= CRITICAL_THRESHOLD_MS,
+    urgent: remainingMs <= URGENT_THRESHOLD_MS,
+  };
+}
+
 function statusPillClass(side: TimerSideView): string {
   if (side.done) {
+    return "pill pill--warn";
+  }
+
+  if (side.critical) {
+    return "pill pill--neg";
+  }
+
+  if (side.urgent) {
     return "pill pill--warn";
   }
 
@@ -58,6 +86,14 @@ function statusText(side: TimerSideView): string {
 
   if (side.done) {
     return "回合结束";
+  }
+
+  if (side.critical) {
+    return "即将超时";
+  }
+
+  if (side.urgent) {
+    return "时间不足";
   }
 
   return side.active ? "计时中" : "等待";
@@ -105,6 +141,8 @@ export function TimerLab({
             `side--${side.tone}`,
             side.active ? "side--active" : "",
             side.done ? "side--done" : "",
+            side.urgent ? "side--urgent" : "",
+            side.critical ? "side--critical" : "",
           ]
             .filter(Boolean)
             .join(" ");

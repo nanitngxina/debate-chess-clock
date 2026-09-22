@@ -1,8 +1,9 @@
 /* ===========================================================================
    首页 Landing
    ---------------------------------------------------------------------------
-   结构：Hero（左文案 + 右实时棋钟）→ 四种身份 → 一个时钟。
-   视觉：编辑式排版 + 现场抽象背景，第一焦点永远是棋钟。
+   结构：Hero（文案 + 通栏实时棋钟）→ 四种身份 → 一个时钟。
+   棋钟通栏铺满整幅宽度 —— 两侧的巨大计时数字需要这么宽才放得下，
+   这也是"时间是第一视觉焦点"这个设计目标的落地方式。
    =========================================================================== */
 
 .landing {
@@ -16,7 +17,7 @@
 .hero {
   position: relative;
   overflow: hidden;
-  padding-block: var(--sp-9) var(--sp-8);
+  padding-block: var(--sp-8) var(--sp-7);
   border-bottom: 1px solid var(--border);
 }
 
@@ -34,17 +35,45 @@
   display: block;
 }
 
+/*
+ * 两列：左文案 / 右按钮；棋钟与底部信息横跨两列。
+ * 用 grid-column 1 / -1 让棋钟吃满整行宽度，这是关键。
+ */
 .hero__inner {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: var(--sp-8);
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-6) var(--sp-8);
+  align-items: end;
 }
 
-.hero__content {
+.hero__intro {
+  grid-column: 1;
   min-width: 0;
+}
+
+.hero__aside {
+  grid-column: 2;
+  display: grid;
+  gap: var(--sp-3);
+  justify-items: end;
+  align-content: end;
+}
+
+.hero__clock {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.hero__meta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3) var(--sp-6);
+  flex-wrap: wrap;
+  font-size: var(--fs-xs);
 }
 
 .hero__title {
@@ -61,11 +90,10 @@
   font-weight: 400;
   line-height: 1.5;
   color: var(--text);
-  max-width: 22ch;
+  max-width: 26ch;
 }
 
 .hero__roles {
-  margin-top: var(--sp-4);
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
   letter-spacing: 0.16em;
@@ -74,7 +102,6 @@
 
 /* 四个能力点：用细分隔线串联，不做成标签堆 */
 .hero__facts {
-  margin-top: var(--sp-5);
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-5);
@@ -98,33 +125,20 @@
 }
 
 .hero__actions {
-  margin-top: var(--sp-6);
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-3);
 }
 
 .hero__join {
-  margin-top: var(--sp-4);
   display: flex;
   gap: var(--sp-2);
-  max-width: 540px;
+  width: min(540px, 100%);
 }
 
 .hero__join .input {
   flex: 1 1 auto;
   min-width: 0;
-}
-
-.hero__clock {
-  display: grid;
-  gap: var(--sp-3);
-  min-width: 0;
-}
-
-.hero__clock-caption {
-  font-size: var(--fs-xs);
-  text-align: right;
 }
 
 /* ---------------------------------------------------------------------------
@@ -237,22 +251,29 @@
    响应式：真机重排，不是把桌面压缩
    --------------------------------------------------------------------------- */
 
-@media (max-width: 1080px) {
+@media (max-width: 900px) {
   .hero {
-    padding-block: var(--sp-8) var(--sp-7);
+    padding-block: var(--sp-7) var(--sp-6);
   }
 
   .hero__inner {
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--sp-7);
+    gap: var(--sp-5);
+  }
+
+  .hero__intro,
+  .hero__aside,
+  .hero__clock,
+  .hero__meta {
+    grid-column: 1;
+  }
+
+  .hero__aside {
+    justify-items: start;
   }
 
   .hero__lead {
     max-width: 30ch;
-  }
-
-  .hero__clock-caption {
-    text-align: left;
   }
 
   .pillar-grid {
@@ -295,6 +316,11 @@
 }
 
 @media (max-width: 620px) {
+  .hero__meta {
+    display: grid;
+    gap: var(--sp-3);
+  }
+
   .hero__facts {
     gap: var(--sp-2) var(--sp-4);
   }
@@ -303,8 +329,16 @@
     left: calc(var(--sp-4) / -2);
   }
 
+  .hero__actions {
+    width: 100%;
+  }
+
   .hero__actions .btn {
     flex: 1 1 100%;
+  }
+
+  .hero__join {
+    width: 100%;
   }
 
   .pillar-grid {
@@ -314,11 +348,6 @@
   .pillar {
     padding: var(--sp-5) 0;
     border-right: none;
-    border-top: 1px solid var(--border-soft);
-  }
-
-  .pillar:nth-child(3),
-  .pillar:nth-child(4) {
     border-top: 1px solid var(--border-soft);
   }
 
