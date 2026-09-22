@@ -3,6 +3,7 @@ main = "worker-index.ts"
 compatibility_date = "2026-03-18"
 compatibility_flags = ["enable_request_signal"]
 
+# 前端静态资源（先 npm run build 生成 dist/，再 deploy）
 [assets]
 directory = "./dist"
 binding = "ASSETS"
@@ -11,27 +12,41 @@ binding = "ASSETS"
 name = "ROOMS"
 class_name = "RoomDurableObject"
 
+# 房间目录（KV）
+# 部署前必须补 id，否则 deploy 会失败：
+#   npx wrangler kv namespace create ROOM_DIRECTORY
+# 然后把输出里的 id 填到这里。
+# 本地开发不需要 id（wrangler dev --local 会用本地模拟）。
 [[kv_namespaces]]
 binding = "ROOM_DIRECTORY"
 
-# 账号数据（账号、会话、验证码）存 D1，与房间用的 KV 分开
-# 本地开发：npx wrangler d1 migrations apply DB --local
-# 部署前：npx wrangler d1 create debate-cage-clock-accounts
-#        然后把下面 database_id 换成创建出来的真实 id
+# 账号数据（账号、会话、验证码、限流、发信记录）存 D1
+# 部署前：
+#   npx wrangler d1 create debate-cage-clock-accounts
+#   把输出里的 database_id 替换掉下面的占位值
+#   然后 npx wrangler d1 migrations apply DB --remote 建表
 [[d1_databases]]
 binding = "DB"
 database_name = "debate-cage-clock-accounts"
 database_id = "local-dev-placeholder"
 migrations_dir = "migrations"
 
-# 头像图片（账号里只存 URL，不存 data URL）
-# 本地开发：wrangler dev --local 自动模拟，不需要创建 bucket
+# 头像图片存 R2（账号里只存 URL，不存 data URL）
 # 部署前：npx wrangler r2 bucket create debate-cage-clock-avatars
+# 本地开发不需要创建（wrangler dev --local 会模拟）
+# 如果暂时不想开通 R2：删掉下面这一段即可，头像上传会返回 503，
+# 其余功能（房间、计时、语音、弹幕）完全不受影响。
 [[r2_buckets]]
 binding = "AVATARS"
 bucket_name = "debate-cage-clock-avatars"
 
+# Durable Object 迁移
+# 用 SQLite 版（new_sqlite_classes）而不是 KV 版（new_classes）：
+# · SQLite 版在 Workers 免费版上就能用，KV 版历来需要付费版
+# · 本项目的房间对象只用 get/put/delete/setAlarm 这套 KV 风格 API，
+#   SQLite 版 DO 完整支持，所以不需要改代码
+# · SQLite 版也是 Cloudflare 现在推荐的默认形态
+# 注意：DO 一旦创建，存储后端就不能再改，所以必须在首次部署前定下来。
 [[migrations]]
 tag = "v1"
-new_classes = ["RoomDurableObject"]
-
+new_sqlite_classes = ["RoomDurableObject"]

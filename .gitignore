@@ -17,6 +17,9 @@ dist-ssr
 # 静态渲染检查的中间产物（npm run check:render 生成）
 .render-check.cjs
 
+# wrangler deploy --dry-run 的输出
+.dry-run-dist
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
