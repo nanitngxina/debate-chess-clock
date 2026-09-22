@@ -1,0 +1,223 @@
+/* ===========================================================================
+   账号相关：登录面板、邮箱验证提示条、账号设置面板
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   登录 / 注册面板
+   --------------------------------------------------------------------------- */
+
+.auth-card {
+  display: grid;
+  gap: var(--sp-5);
+  padding: var(--sp-5);
+  background: var(--panel-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+
+.auth-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+.auth-card__title {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  margin-top: var(--sp-2);
+}
+
+.auth-card__desc {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  max-width: 40ch;
+}
+
+.auth-card__tabs {
+  gap: var(--sp-5);
+}
+
+.auth-form {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+.auth-actions {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+/* 验证码输入：等宽、字距拉开、居中，像设备读数 */
+.input--code {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.4em;
+  text-align: center;
+  max-width: 180px;
+}
+
+/* ---------------------------------------------------------------------------
+   邮箱未验证提示条：通栏细条，不抢计时器的视觉焦点
+   --------------------------------------------------------------------------- */
+
+.notice-bar {
+  border-bottom: 1px solid var(--warn-line);
+  background: var(--warn-soft);
+}
+
+.notice-bar__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  padding-block: var(--sp-3);
+  font-size: var(--fs-sm);
+}
+
+.notice-bar__text {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: #fbbf5c;
+}
+
+.notice-bar__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.notice-bar__code {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.notice-bar__code input {
+  width: 104px;
+  height: 32px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r-sm);
+  background: rgba(10, 10, 11, 0.5);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.24em;
+  text-align: center;
+  font-size: var(--fs-sm);
+}
+
+.notice-bar__code input:focus {
+  outline: none;
+  border-color: var(--warn);
+}
+
+/* ---------------------------------------------------------------------------
+   账号设置面板
+   --------------------------------------------------------------------------- */
+
+.account-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  gap: var(--sp-6);
+}
+
+.account-preview {
+  display: grid;
+  gap: var(--sp-4);
+  align-content: start;
+}
+
+.account-preview__figure {
+  display: grid;
+  place-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-5) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--panel-inset);
+  text-align: center;
+}
+
+.account-preview__name {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.account-form {
+  display: grid;
+  gap: var(--sp-5);
+}
+
+/* 头像选项：扁平网格，选中用边框和底色表达 */
+.avatar-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: var(--sp-2);
+}
+
+.avatar-option {
+  display: grid;
+  gap: var(--sp-2);
+  justify-items: center;
+  padding: var(--sp-3) var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-inset);
+  color: var(--text-muted);
+  text-align: center;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.avatar-option:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.avatar-option--active {
+  border-color: var(--affirmative);
+  background: var(--affirmative-soft);
+  color: var(--text);
+}
+
+.avatar-option__label {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
+.avatar-option__note {
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.avatar-option__glyph {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md);
+  color: var(--text-dim);
+  font-size: var(--fs-lg);
+}
+
+/* 文件选择框隐藏，用按钮触发 */
+.file-input {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .account-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

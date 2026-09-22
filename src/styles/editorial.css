@@ -1,0 +1,157 @@
+/* ===========================================================================
+   编辑型页面：使用指南、关于
+   ---------------------------------------------------------------------------
+   采用"编辑设计"排版：大标题、窄栏正文、编号步骤、细分割线。不用卡片墙。
+   =========================================================================== */
+
+.page-head {
+  padding-block: var(--sp-8) var(--sp-6);
+  border-bottom: 1px solid var(--border);
+}
+
+.page-head__title {
+  font-size: var(--fs-3xl);
+  font-weight: 600;
+  margin-top: var(--sp-3);
+}
+
+.page-head__lead {
+  margin-top: var(--sp-4);
+  max-width: 46ch;
+  color: var(--text-muted);
+  font-size: var(--fs-lg);
+  line-height: 1.55;
+}
+
+/* 窄栏正文：编辑设计的关键，行长受控更好读 */
+.prose {
+  max-width: 68ch;
+}
+
+.prose p {
+  margin-bottom: var(--sp-4);
+  color: var(--text-muted);
+  line-height: 1.75;
+}
+
+.prose p:last-child {
+  margin-bottom: 0;
+}
+
+.prose strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* 编号步骤 */
+.steps {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: var(--sp-5);
+  padding-block: var(--sp-6);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.step__index {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  color: var(--text-dim);
+  line-height: 1;
+  padding-top: 4px;
+}
+
+.step__title {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  margin-bottom: var(--sp-2);
+}
+
+.step__body {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.7;
+  max-width: 62ch;
+}
+
+.step__body ul {
+  margin-top: var(--sp-3);
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.step__body li {
+  padding-left: var(--sp-4);
+  position: relative;
+}
+
+.step__body li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.65em;
+  width: 5px;
+  height: 1px;
+  background: var(--text-dim);
+}
+
+/* 定义列表：术语 + 说明 */
+.def-list {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.def {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) 1fr;
+  gap: var(--sp-5);
+  padding-block: var(--sp-4);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.def__term {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.def__desc {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+@media (max-width: 720px) {
+  .page-head {
+    padding-block: var(--sp-7) var(--sp-5);
+  }
+
+  .page-head__title {
+    font-size: var(--fs-2xl);
+  }
+
+  .page-head__lead {
+    font-size: var(--fs-base);
+  }
+
+  .step {
+    grid-template-columns: 1fr;
+    gap: var(--sp-2);
+  }
+
+  .step__index {
+    font-size: var(--fs-base);
+    padding-top: 0;
+  }
+
+  .def {
+    grid-template-columns: 1fr;
+    gap: var(--sp-2);
+  }
+}

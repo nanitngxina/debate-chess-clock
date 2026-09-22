@@ -1,15 +1,39 @@
 import { FormEvent, useState } from "react";
 import { AccountSession } from "../hooks/useAccountSession";
-import "./AuthPanel.css";
 
 type AuthMode = "login" | "register" | "forgot" | "reset";
 
 interface AuthPanelProps {
   session: AccountSession;
   initialMode?: AuthMode;
+  /** 传了就在标题栏显示关闭按钮（用于弹层形式） */
+  onClose?: () => void;
 }
 
-const PASSWORD_HINT = "至少 8 位，且同时包含字母和数字";
+const PASSWORD_HINT = "至少 8 位，同时包含字母和数字";
+
+const MODE_COPY: Record<AuthMode, { label: string; title: string; desc: string }> = {
+  login: {
+    label: "Account",
+    title: "登录",
+    desc: "用注册时的邮箱和密码继续。",
+  },
+  register: {
+    label: "Account",
+    title: "创建账号",
+    desc: "账号用来保存你的出场名称和头像，换设备也在。",
+  },
+  forgot: {
+    label: "Recover",
+    title: "找回密码",
+    desc: "填写注册时用的邮箱，我们会把重置验证码发过去。",
+  },
+  reset: {
+    label: "Recover",
+    title: "设置新密码",
+    desc: "输入收到的 6 位验证码，并设置一个新密码。",
+  },
+};
 
 function validatePasswordLocally(value: string): string | null {
   if (value.length < 8) {
@@ -31,7 +55,7 @@ function validateEmailLocally(value: string): string | null {
   return null;
 }
 
-export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
+export function AuthPanel({ session, initialMode = "login", onClose }: AuthPanelProps) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -45,6 +69,7 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
   const [localError, setLocalError] = useState<string | null>(null);
 
   const busy = session.saving || session.loading;
+  const copy = MODE_COPY[mode];
 
   function switchMode(next: AuthMode) {
     setMode(next);
@@ -76,7 +101,7 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
     }
 
     if (!displayName.trim()) {
-      setLocalError("请填写你在辩论场里显示的名字");
+      setLocalError("请填写你在比赛里显示的名字");
       return;
     }
 
@@ -88,12 +113,10 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
       });
 
       if (response.devCode) {
-        setDevHint(
-          `当前没有配置发信服务，验证码是 ${response.devCode}（仅本地开发模式可见）。`,
-        );
+        setDevHint(`当前未配置发信服务，验证码是 ${response.devCode}（仅本地开发可见）。`);
       }
     } catch {
-      // 错误已由 hook 记进 session.error
+      // 错误已由 session hook 记录
     }
   }
 
@@ -117,7 +140,7 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
     try {
       await session.login({ email: email.trim(), password });
     } catch {
-      // 错误已由 hook 记进 session.error
+      // 错误已由 session hook 记录
     }
   }
 
@@ -137,14 +160,14 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
       const response = await session.requestReset(email.trim());
 
       if (response.devCode) {
-        setDevHint(`当前没有配置发信服务，验证码是 ${response.devCode}（仅本地开发模式可见）。`);
+        setDevHint(`当前未配置发信服务，验证码是 ${response.devCode}（仅本地开发可见）。`);
         setResetCode(response.devCode);
       }
 
       setNotice(response.message ?? "如果该邮箱已注册，我们已发送重置验证码。");
       setMode("reset");
     } catch {
-      // 错误已由 hook 记进 session.error
+      // 错误已由 session hook 记录
     }
   }
 
@@ -184,38 +207,39 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
       setResetCode("");
       setMode("login");
     } catch {
-      // 错误已由 hook 记进 session.error
+      // 错误已由 session hook 记录
     }
   }
 
   const visibleError = localError ?? session.error;
 
   return (
-    <section className="card auth-panel">
-      <div className="auth-panel__hero">
-        <span className="card__eyebrow">账号</span>
-        <h2>
-          {mode === "register" && "创建你的账号"}
-          {mode === "login" && "登录八角笼"}
-          {mode === "forgot" && "找回密码"}
-          {mode === "reset" && "设置新密码"}
-        </h2>
-        <p>
-          {mode === "register" &&
-            "注册后你的名字和头像会跟着账号走，换设备、换浏览器都还在。"}
-          {mode === "login" && "用注册时的邮箱和密码登录，继续你上次的进度。"}
-          {mode === "forgot" && "填写注册时用的邮箱，我们会把重置验证码发过去。"}
-          {mode === "reset" && "输入收到的验证码，并设置一个新密码。"}
-        </p>
-      </div>
+    <section className="auth-card">
+      <header className="auth-card__head">
+        <div>
+          <span className="u-label">{copy.label}</span>
+          <h2 className="auth-card__title">{copy.title}</h2>
+          <p className="auth-card__desc">{copy.desc}</p>
+        </div>
+        {onClose && (
+          <button
+            type="button"
+            className="btn btn--quiet btn--icon"
+            onClick={onClose}
+            aria-label="关闭"
+          >
+            ✕
+          </button>
+        )}
+      </header>
 
       {(mode === "login" || mode === "register") && (
-        <div className="auth-tabs" role="tablist">
+        <div className="tabs auth-card__tabs" role="tablist">
           <button
             type="button"
             role="tab"
             aria-selected={mode === "login"}
-            className={`auth-tab ${mode === "login" ? "auth-tab--active" : ""}`}
+            className="tab"
             onClick={() => switchMode("login")}
           >
             登录
@@ -224,7 +248,7 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
             type="button"
             role="tab"
             aria-selected={mode === "register"}
-            className={`auth-tab ${mode === "register" ? "auth-tab--active" : ""}`}
+            className="tab"
             onClick={() => switchMode("register")}
           >
             注册
@@ -233,25 +257,27 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
       )}
 
       {notice && <p className="feedback feedback--notice">{notice}</p>}
-      {devHint && <p className="auth-hint auth-hint--dev">{devHint}</p>}
+      {devHint && <p className="feedback feedback--notice">{devHint}</p>}
 
       {mode === "register" && (
         <form className="auth-form" onSubmit={handleRegister}>
-          <label className="auth-field">
-            出场名称
+          <label className="field">
+            <span className="field__label">出场名称</span>
             <input
+              className="input"
               type="text"
               maxLength={20}
               value={displayName}
-              placeholder="例如：菲比啾比,菲八啾比，糯糯"
               autoComplete="nickname"
               onChange={(event) => setDisplayName(event.target.value)}
             />
+            <span className="field__hint">比赛中显示的名字，最长 20 字</span>
           </label>
 
-          <label className="auth-field">
-            邮箱
+          <label className="field">
+            <span className="field__label">邮箱</span>
             <input
+              className="input"
               type="email"
               value={email}
               placeholder="you@example.com"
@@ -260,19 +286,19 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
             />
           </label>
 
-          <label className="auth-field">
-            密码
+          <label className="field">
+            <span className="field__label">密码</span>
             <input
+              className="input"
               type={showPassword ? "text" : "password"}
               value={password}
-              placeholder={PASSWORD_HINT}
               autoComplete="new-password"
               onChange={(event) => setPassword(event.target.value)}
             />
-            <span className="auth-field__tip">{PASSWORD_HINT}</span>
+            <span className="field__hint">{PASSWORD_HINT}</span>
           </label>
 
-          <label className="auth-checkbox">
+          <label className="checkbox">
             <input
               type="checkbox"
               checked={showPassword}
@@ -281,19 +307,18 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
             显示密码
           </label>
 
-          <div className="auth-actions">
-            <button type="submit" className="button" disabled={busy}>
-              {session.saving ? "创建中..." : "注册并进入"}
-            </button>
-          </div>
+          <button type="submit" className="btn btn--primary btn--lg btn--block" disabled={busy}>
+            {session.saving ? "创建中…" : "注册并进入"}
+          </button>
         </form>
       )}
 
       {mode === "login" && (
         <form className="auth-form" onSubmit={handleLogin}>
-          <label className="auth-field">
-            邮箱
+          <label className="field">
+            <span className="field__label">邮箱</span>
             <input
+              className="input"
               type="email"
               value={email}
               placeholder="you@example.com"
@@ -302,55 +327,65 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
             />
           </label>
 
-          <label className="auth-field">
-            密码
+          <label className="field">
+            <span className="field__label">密码</span>
             <input
+              className="input"
               type={showPassword ? "text" : "password"}
               value={password}
-              placeholder="你的密码"
               autoComplete="current-password"
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
 
-          <label className="auth-checkbox">
-            <input
-              type="checkbox"
-              checked={showPassword}
-              onChange={(event) => setShowPassword(event.target.checked)}
-            />
-            显示密码
-          </label>
-
-          <div className="auth-actions">
-            <button type="submit" className="button" disabled={busy}>
-              {session.saving ? "登录中..." : "登录"}
-            </button>
-            <button type="button" className="button button--ghost" onClick={() => switchMode("forgot")}>
+          <div className="row row--between">
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={showPassword}
+                onChange={(event) => setShowPassword(event.target.checked)}
+              />
+              显示密码
+            </label>
+            <button
+              type="button"
+              className="btn btn--quiet btn--sm"
+              onClick={() => switchMode("forgot")}
+            >
               忘记密码？
             </button>
           </div>
+
+          <button type="submit" className="btn btn--primary btn--lg btn--block" disabled={busy}>
+            {session.saving ? "登录中…" : "登录"}
+          </button>
         </form>
       )}
 
       {mode === "forgot" && (
         <form className="auth-form" onSubmit={handleForgot}>
-          <label className="auth-field">
-            注册邮箱
+          <label className="field">
+            <span className="field__label">注册邮箱</span>
             <input
+              className="input"
               type="email"
               value={email}
               placeholder="you@example.com"
               autoComplete="email"
               onChange={(event) => setEmail(event.target.value)}
             />
+            <span className="field__hint">我们会发送一个 6 位验证码用于重置密码</span>
           </label>
 
           <div className="auth-actions">
-            <button type="submit" className="button" disabled={busy}>
-              {session.saving ? "发送中..." : "发送重置验证码"}
+            <button type="submit" className="btn btn--primary btn--block" disabled={busy}>
+              {session.saving ? "发送中…" : "发送重置验证码"}
             </button>
-            <button type="button" className="button button--ghost" onClick={() => switchMode("login")}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--block"
+              onClick={() => switchMode("login")}
+            >
               返回登录
             </button>
           </div>
@@ -359,14 +394,15 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
 
       {mode === "reset" && (
         <form className="auth-form" onSubmit={handleReset}>
-          <label className="auth-field">
-            邮箱
-            <input type="email" value={email} readOnly onChange={() => undefined} />
+          <label className="field">
+            <span className="field__label">邮箱</span>
+            <input className="input" type="email" value={email} readOnly />
           </label>
 
-          <label className="auth-field">
-            6 位验证码
+          <label className="field">
+            <span className="field__label">验证码</span>
             <input
+              className="input input--code"
               type="text"
               inputMode="numeric"
               maxLength={6}
@@ -376,30 +412,30 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
             />
           </label>
 
-          <label className="auth-field">
-            新密码
+          <label className="field">
+            <span className="field__label">新密码</span>
             <input
+              className="input"
               type={showPassword ? "text" : "password"}
               value={newPassword}
-              placeholder={PASSWORD_HINT}
               autoComplete="new-password"
               onChange={(event) => setNewPassword(event.target.value)}
             />
-            <span className="auth-field__tip">{PASSWORD_HINT}</span>
+            <span className="field__hint">{PASSWORD_HINT}</span>
           </label>
 
-          <label className="auth-field">
-            确认新密码
+          <label className="field">
+            <span className="field__label">确认新密码</span>
             <input
+              className="input"
               type={showPassword ? "text" : "password"}
               value={confirmPassword}
-              placeholder="再输入一次"
               autoComplete="new-password"
               onChange={(event) => setConfirmPassword(event.target.value)}
             />
           </label>
 
-          <label className="auth-checkbox">
+          <label className="checkbox">
             <input
               type="checkbox"
               checked={showPassword}
@@ -409,10 +445,14 @@ export function AuthPanel({ session, initialMode = "login" }: AuthPanelProps) {
           </label>
 
           <div className="auth-actions">
-            <button type="submit" className="button" disabled={busy}>
-              {session.saving ? "提交中..." : "重置密码"}
+            <button type="submit" className="btn btn--primary btn--block" disabled={busy}>
+              {session.saving ? "提交中…" : "重置密码"}
             </button>
-            <button type="button" className="button button--ghost" onClick={() => switchMode("login")}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--block"
+              onClick={() => switchMode("login")}
+            >
               返回登录
             </button>
           </div>

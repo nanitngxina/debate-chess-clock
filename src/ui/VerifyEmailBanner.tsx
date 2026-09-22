@@ -6,8 +6,8 @@ interface VerifyEmailBannerProps {
 }
 
 /**
- * 邮箱未验证时的顶部提示条。
- * 不阻塞使用，只是提醒 + 提供验证入口（和重发验证码）。
+ * 邮箱未验证时的提示条。
+ * 通栏细条，不阻塞使用，只提醒并给出验证入口与重发入口。
  */
 export function VerifyEmailBanner({ session }: VerifyEmailBannerProps) {
   const [code, setCode] = useState("");
@@ -56,37 +56,41 @@ export function VerifyEmailBanner({ session }: VerifyEmailBannerProps) {
   const visibleError = localError ?? session.error;
 
   return (
-    <div className="verify-banner">
-      <div>
-        <strong>邮箱还没验证</strong>
-        <span> —— 验证后才能在忘记密码时自助找回。</span>
-        {notice && <div>{notice}</div>}
-        {devHint && <div>{devHint}</div>}
-        {visibleError && <div className="feedback feedback--error">{visibleError}</div>}
-      </div>
+    <div className="notice-bar">
+      <div className="container notice-bar__inner">
+        <span className="notice-bar__text">
+          <span className="dot" />
+          邮箱未验证 —— 验证后才能在忘记密码时自助找回
+        </span>
 
-      <div className="verify-banner__actions">
-        <form className="verify-banner__code" onSubmit={handleVerify}>
-          <input
-            type="text"
-            inputMode="numeric"
-            maxLength={6}
-            value={code}
-            placeholder="000000"
-            onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-          />
-          <button type="submit" className="button" disabled={session.saving}>
-            验证
+        {notice && <span className="muted">{notice}</span>}
+        {devHint && <span className="muted">{devHint}</span>}
+        {visibleError && <span className="feedback feedback--error">{visibleError}</span>}
+
+        <div className="notice-bar__actions">
+          <form className="notice-bar__code" onSubmit={handleVerify}>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={code}
+              placeholder="000000"
+              aria-label="邮箱验证码"
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+            />
+            <button type="submit" className="btn btn--sm" disabled={session.saving}>
+              验证
+            </button>
+          </form>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            disabled={session.saving}
+            onClick={handleResend}
+          >
+            重发验证码
           </button>
-        </form>
-        <button
-          type="button"
-          className="button button--ghost"
-          disabled={session.saving}
-          onClick={handleResend}
-        >
-          重发验证码
-        </button>
+        </div>
       </div>
     </div>
   );

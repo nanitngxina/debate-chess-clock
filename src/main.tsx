@@ -7,6 +7,9 @@ import "./index.css";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/components.css";
+import "./styles/shell.css";
+import "./styles/editorial.css";
+import "./styles/account.css";
 import App from "./App";
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
