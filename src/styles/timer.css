@@ -1,0 +1,268 @@
+/* ===========================================================================
+   棋钟视觉语言（首页 Hero 与房间页共用）
+   ---------------------------------------------------------------------------
+   这是整个产品最重要的组件。目标：像一台专业比赛计时设备。
+   · 巨大等宽数字，第一视觉焦点
+   · 正方=蓝 / 反方=红，当前计时方用顶部色线 + 底色光晕 + 状态标签表达
+   · 等待方整体压暗，对比一定要够
+   · 不用大圆角、不用阴影堆叠、不用渐变背景
+   =========================================================================== */
+
+.timer-lab {
+  position: relative;
+  background: var(--panel-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+/* --- 顶部状态条：LIVE / 环节 / 回合 / 已用时间 ------------------------- */
+
+.timer-lab__status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.timer-lab__status .spacer {
+  flex: 1 1 auto;
+}
+
+.timer-lab__phase {
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: none;
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+}
+
+/* --- 计时主体：左右两块，中间一条细线 -------------------------------- */
+
+.timer-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+}
+
+.timer-board__divider {
+  background: var(--border);
+}
+
+.side {
+  position: relative;
+  display: grid;
+  gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
+  min-width: 0;
+}
+
+/* 每块侧别的主题色走局部变量，下面所有细节都引用它 */
+.side--aff {
+  --side: var(--affirmative);
+  --side-soft: var(--affirmative-soft);
+  --side-line: var(--affirmative-line);
+  --side-glow: var(--affirmative-glow);
+}
+
+.side--neg {
+  --side: var(--negative);
+  --side-soft: var(--negative-soft);
+  --side-line: var(--negative-line);
+  --side-glow: var(--negative-glow);
+}
+
+.side__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.side__name {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side--active .side__name,
+.side--done .side__name {
+  color: var(--text);
+}
+
+/* 主读数 */
+.side__digits {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  font-size: var(--fs-timer);
+  font-weight: 500;
+  line-height: 0.94;
+  letter-spacing: -0.02em;
+  color: var(--text-dim);
+  transition: color var(--dur) var(--ease);
+}
+
+/* 正在计时：白色数字（最高可读性）+ 顶部色线 + 底色光晕 */
+.side--active .side__digits {
+  color: var(--text);
+}
+
+.side--active {
+  box-shadow: inset 0 2px 0 0 var(--side);
+}
+
+.side--active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 78% at 50% 0%, var(--side-glow), transparent 62%);
+  animation: side-breathe 3.4s var(--ease) infinite;
+}
+
+@keyframes side-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+/* 时间用完 / 回合结束：数字回到暗色，不再抢焦点 */
+.side--done .side__digits {
+  color: var(--text-muted);
+}
+
+.side__bar {
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: var(--border-soft);
+  overflow: hidden;
+}
+
+.side__bar-fill {
+  height: 100%;
+  background: var(--side);
+  opacity: 0.35;
+  transition: width var(--dur) linear;
+}
+
+.side--active .side__bar-fill {
+  opacity: 1;
+}
+
+/* 轮次结束横幅（ROUND END） */
+.timer-lab__banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-top: 1px solid var(--border);
+  background: var(--panel-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* --- 底部：总时长 ---------------------------------------------------- */
+
+.timer-lab__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--border);
+  background: var(--panel-2);
+}
+
+.timer-lab__foot-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+
+.timer-lab__foot-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* --- 尺寸变体 --------------------------------------------------------- */
+
+/* 首页 Hero：独占一块，数字最大 */
+.timer-lab--hero .side__digits {
+  font-size: var(--fs-timer-lg);
+}
+
+.timer-lab--hero .side {
+  padding: var(--sp-6) var(--sp-6) var(--sp-5);
+}
+
+/* 房间页：在信息较多的环境里略小一号 */
+.timer-lab--room .side__digits {
+  font-size: var(--fs-timer);
+}
+
+/* 辩手极简视图：只有自己一方，数字最大 */
+.timer-lab--solo .side__digits {
+  font-size: var(--fs-timer-lg);
+}
+
+/* --- 响应式：手机上下排列，数字依然要很大 ---------------------------- */
+
+@media (max-width: 720px) {
+  .timer-board {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1px auto;
+  }
+
+  .timer-board__divider {
+    height: 1px;
+  }
+
+  .side {
+    padding: var(--sp-5) var(--sp-4) var(--sp-4);
+    gap: var(--sp-3);
+  }
+
+  .side__digits,
+  .timer-lab--hero .side__digits {
+    font-size: var(--fs-timer-sm);
+  }
+
+  .timer-lab__status {
+    gap: var(--sp-2) var(--sp-3);
+  }
+
+  .timer-lab__foot {
+    padding: var(--sp-3) var(--sp-4);
+  }
+}
+
+@media (max-width: 420px) {
+  .side__digits,
+  .timer-lab--hero .side__digits {
+    font-size: clamp(2.25rem, 11vw, 3rem);
+  }
+}

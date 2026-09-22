@@ -1,0 +1,328 @@
+/* ===========================================================================
+   首页 Landing
+   ---------------------------------------------------------------------------
+   结构：Hero（左文案 + 右实时棋钟）→ 四种身份 → 一个时钟。
+   视觉：编辑式排版 + 现场抽象背景，第一焦点永远是棋钟。
+   =========================================================================== */
+
+.landing {
+  flex: 1 1 auto;
+}
+
+/* ---------------------------------------------------------------------------
+   Hero
+   --------------------------------------------------------------------------- */
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding-block: var(--sp-9) var(--sp-8);
+  border-bottom: 1px solid var(--border);
+}
+
+.hero__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.arena-backdrop {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hero__inner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: var(--sp-8);
+  align-items: center;
+}
+
+.hero__content {
+  min-width: 0;
+}
+
+.hero__title {
+  margin-top: var(--sp-4);
+  font-size: var(--fs-hero);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.02;
+}
+
+.hero__lead {
+  margin-top: var(--sp-4);
+  font-size: clamp(1.125rem, 1.7vw, 1.5rem);
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text);
+  max-width: 22ch;
+}
+
+.hero__roles {
+  margin-top: var(--sp-4);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+}
+
+/* 四个能力点：用细分隔线串联，不做成标签堆 */
+.hero__facts {
+  margin-top: var(--sp-5);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+}
+
+.hero__facts li {
+  position: relative;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.hero__facts li + li::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--sp-5) / -2);
+  top: 50%;
+  width: 1px;
+  height: 12px;
+  transform: translateY(-50%);
+  background: var(--border-strong);
+}
+
+.hero__actions {
+  margin-top: var(--sp-6);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
+.hero__join {
+  margin-top: var(--sp-4);
+  display: flex;
+  gap: var(--sp-2);
+  max-width: 540px;
+}
+
+.hero__join .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hero__clock {
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.hero__clock-caption {
+  font-size: var(--fs-xs);
+  text-align: right;
+}
+
+/* ---------------------------------------------------------------------------
+   四种身份：规格表式的三栏，不使用卡片
+   --------------------------------------------------------------------------- */
+
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--border);
+}
+
+.role {
+  display: grid;
+  gap: var(--sp-3);
+  align-content: start;
+  padding: var(--sp-6) var(--sp-5) var(--sp-5) 0;
+  border-right: 1px solid var(--border-soft);
+}
+
+.role:not(:first-child) {
+  padding-left: var(--sp-5);
+}
+
+.role:last-child {
+  border-right: none;
+}
+
+.role__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  color: var(--text-muted);
+}
+
+.role:nth-child(2) .role__icon {
+  color: var(--affirmative);
+}
+
+.role__title {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.role__items {
+  display: grid;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+
+.role__items li {
+  position: relative;
+  padding-left: var(--sp-4);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.role__items li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.72em;
+  width: 6px;
+  height: 1px;
+  background: var(--border-strong);
+}
+
+/* ---------------------------------------------------------------------------
+   一个时钟：四个要点，极简图标 + 标题 + 一句话
+   --------------------------------------------------------------------------- */
+
+.pillar-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--border);
+}
+
+.pillar {
+  display: grid;
+  gap: var(--sp-3);
+  align-content: start;
+  padding: var(--sp-6) var(--sp-5) var(--sp-5) 0;
+  border-right: 1px solid var(--border-soft);
+}
+
+.pillar:not(:first-child) {
+  padding-left: var(--sp-5);
+}
+
+.pillar:last-child {
+  border-right: none;
+}
+
+.pillar__icon {
+  color: var(--text-muted);
+}
+
+.pillar__title {
+  font-size: var(--fs-base);
+  font-weight: 600;
+}
+
+.pillar__desc {
+  font-size: var(--fs-sm);
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   响应式：真机重排，不是把桌面压缩
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 1080px) {
+  .hero {
+    padding-block: var(--sp-8) var(--sp-7);
+  }
+
+  .hero__inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-7);
+  }
+
+  .hero__lead {
+    max-width: 30ch;
+  }
+
+  .hero__clock-caption {
+    text-align: left;
+  }
+
+  .pillar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pillar:nth-child(2) {
+    border-right: none;
+    padding-right: 0;
+  }
+
+  .pillar:nth-child(3) {
+    padding-left: 0;
+    border-top: 1px solid var(--border-soft);
+  }
+
+  .pillar:nth-child(4) {
+    border-top: 1px solid var(--border-soft);
+  }
+}
+
+@media (max-width: 860px) {
+  .role-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .role {
+    padding: var(--sp-5) 0;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .role:not(:first-child) {
+    padding-left: 0;
+  }
+
+  .role:last-child {
+    border-bottom: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .hero__facts {
+    gap: var(--sp-2) var(--sp-4);
+  }
+
+  .hero__facts li + li::before {
+    left: calc(var(--sp-4) / -2);
+  }
+
+  .hero__actions .btn {
+    flex: 1 1 100%;
+  }
+
+  .pillar-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pillar {
+    padding: var(--sp-5) 0;
+    border-right: none;
+    border-top: 1px solid var(--border-soft);
+  }
+
+  .pillar:nth-child(3),
+  .pillar:nth-child(4) {
+    border-top: 1px solid var(--border-soft);
+  }
+
+  .pillar:first-child {
+    border-top: none;
+  }
+}

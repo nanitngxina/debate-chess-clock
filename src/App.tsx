@@ -79,7 +79,10 @@ export default function App() {
         ) : (
           <>
             {route.name === "home" && (
-              <MarketingPage onOpenDashboard={() => navigate("/dashboard")} />
+              <MarketingPage
+                onNavigate={navigate}
+                onJoinRoom={(href) => window.location.assign(href)}
+              />
             )}
             {route.name === "guide" && <GuidePage onNavigate={navigate} />}
             {route.name === "about" && <AboutPage onNavigate={navigate} />}

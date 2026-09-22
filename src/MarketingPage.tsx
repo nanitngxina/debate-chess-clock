@@ -1,173 +1,238 @@
+import { FormEvent, useState } from "react";
+import { ArenaBackdrop } from "./ui/ArenaBackdrop";
+import { HeroClock } from "./ui/HeroClock";
+import {
+  IconAudience,
+  IconBonus,
+  IconChat,
+  IconControl,
+  IconMic,
+  IconSides,
+  IconTimer,
+} from "./ui/icons";
+
 interface MarketingPageProps {
-  onOpenDashboard: () => void;
+  onNavigate: (path: string) => void;
+  /** 粘贴房间链接后跳转（整页跳转，因为房间链接带 query 权限参数） */
+  onJoinRoom: (href: string) => void;
 }
 
-const heroStats = [
+const ROLES = [
   {
-    value: "4 类角色入口",
-    label: "主持、正方、反方、观众链接一次生成，分享路径更清晰。",
+    id: "host",
+    Icon: IconControl,
+    label: "主持人",
+    title: "掌控比赛节奏",
+    items: ["后台控制比赛", "管理房间", "调整规则", "操作计时"],
   },
   {
-    value: "实时房间同步",
-    label: "计时、回合、弹幕和语音状态在同一房间内统一广播。",
+    id: "sides",
+    Icon: IconSides,
+    label: "正方 / 反方",
+    title: "只管自己这一方",
+    items: ["专属链接进入", "查看自己的时间", "结束自己的回合", "自己计时时开启麦克风"],
   },
   {
-    value: "桌面与手机同看",
-    label: "主持后台和观众页都能快速进入同一场辩论。",
-  },
-];
-
-const launchSteps = [
-  {
-    index: "01",
-    title: "主持人开房",
-    description: "在后台填写辩题、规则、双方名称和计时配置。",
-  },
-  {
-    index: "02",
-    title: "分发专属链接",
-    description: "系统一次生成主持、正方、反方、观众四类访问入口。",
-  },
-  {
-    index: "03",
-    title: "全端同步观看",
-    description: "所有成员进入同一房间后，回合状态会自动保持一致。",
-  },
-];
-
-const focusPoints = [
-  {
-    title: "轻权限模型",
-    description: "第一版不引入重账号系统，用链接和角色直接完成授权。",
-  },
-  {
-    title: "主持台优先",
-    description: "把开房、改题、调时、分发链接和控场集中到后台完成。",
-  },
-  {
-    title: "服务端托管房间状态",
-    description: "基于 Worker API 与 Durable Object 维护统一的房间时钟。",
-  },
-];
-
-const featureCards = [
-  {
-    eyebrow: "在线同步",
-    title: "同一房间，多端同屏",
-    description: "主持操作、辩手回合、观众弹幕都会实时广播给房间内所有人。",
-    meta: "减少“谁那边还没刷新”的割裂感",
-    tone: "sync",
-  },
-  {
-    eyebrow: "主持后台",
-    title: "把控节奏更顺手",
-    description: "建房、修改辩题、更新规则、控制棋钟和分享链接，都集中在一个后台完成。",
-    meta: "适合活动主持、线上赛和社团内部演练",
-    tone: "control",
-  },
-  {
-    eyebrow: "权限模型",
-    title: "基于链接的轻量授权",
-    description: "正方、反方、主持人和观众各自拥有对应入口，进入即带权限，不需要额外注册流程。",
-    meta: "更适合临时房间和快速开赛",
-    tone: "access",
-  },
-  {
-    eyebrow: "部署方向",
-    title: "Cloudflare 友好",
-    description: "仓库已经按静态前端、Worker API 和房间对象状态管理的方向完成重组。",
-    meta: "便于持续部署，也更适合多人在线场景",
-    tone: "deploy",
+    id: "viewer",
+    Icon: IconAudience,
+    label: "观众",
+    title: "看比赛，也能参与",
+    items: ["观看比赛", "发送弹幕", "申请上麦", "参与互动"],
   },
 ] as const;
 
-export function MarketingPage({ onOpenDashboard }: MarketingPageProps) {
+const PILLARS = [
+  {
+    id: "timer",
+    Icon: IconTimer,
+    title: "双轨倒计时",
+    desc: "正反方各自计时，同时还有一个总时长在走。",
+  },
+  {
+    id: "bonus",
+    Icon: IconBonus,
+    title: "自动加时",
+    desc: "每回合结束按规则给结束方加时，回合区间可配置。",
+  },
+  {
+    id: "chat",
+    Icon: IconChat,
+    title: "弹幕交流",
+    desc: "观众实时参与，不打断比赛节奏。",
+  },
+  {
+    id: "voice",
+    Icon: IconMic,
+    title: "语音通话",
+    desc: "辩手在自己计时时开麦，观众可申请上麦。",
+  },
+] as const;
+
+/** 只接受真正的房间链接，避免把随便一个网址跳过去 */
+function normalizeRoomHref(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value, window.location.origin);
+    if (!/^\/room\/[^/]+/.test(url.pathname)) {
+      return null;
+    }
+
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
+}
+
+export function MarketingPage({ onNavigate, onJoinRoom }: MarketingPageProps) {
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [joinValue, setJoinValue] = useState("");
+  const [joinError, setJoinError] = useState<string | null>(null);
+
+  function handleJoin(event: FormEvent) {
+    event.preventDefault();
+    const href = normalizeRoomHref(joinValue);
+
+    if (!href) {
+      setJoinError("请粘贴完整的房间链接（形如 …/room/A482?role=viewer&token=…）");
+      return;
+    }
+
+    setJoinError(null);
+    onJoinRoom(href);
+  }
+
   return (
-    <main className="landing">
-      <section className="hero hero--landing">
-        <div className="hero__content">
-          <div className="hero__headline">
-            <span className="hero__eyebrow">餐社八角笼 Online</span>
-            <div className="hero__status-row">
-              <span className="hero__chip">多人同步</span>
-              <span className="hero__chip">主持后台</span>
-              <span className="hero__chip">移动端可看</span>
+    <div className="landing">
+      {/* ---------------------------------------------------------------- */}
+      <section className="hero">
+        <div className="hero__backdrop" aria-hidden="true">
+          <ArenaBackdrop />
+        </div>
+
+        <div className="container hero__inner">
+          <div className="hero__content">
+            <span className="u-label">Online Debate Timer</span>
+            <h1 className="hero__title">八角笼</h1>
+            <p className="hero__lead">
+              让每一场辩论
+              <br />
+              拥有一个共同的时间。
+            </p>
+            <p className="hero__roles">主持人 · 正方 · 反方 · 观众</p>
+
+            <ul className="hero__facts">
+              <li>实时同步</li>
+              <li>多端可用</li>
+              <li>语音互动</li>
+              <li>弹幕交流</li>
+            </ul>
+
+            <div className="hero__actions">
+              <button
+                type="button"
+                className="btn btn--primary btn--lg"
+                onClick={() => onNavigate("/dashboard")}
+              >
+                创建比赛
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--lg"
+                aria-expanded={joinOpen}
+                onClick={() => {
+                  setJoinOpen((value) => !value);
+                  setJoinError(null);
+                }}
+              >
+                进入房间
+              </button>
             </div>
-            <h1>餐社八角笼</h1>
-            <p>
-              这一版支持多房间、多人同步观看、主持后台开房、正反方专属权限链接以及观众弹幕。
-              房间状态由服务端统一维护，手机和桌面都能实时看到同一场辩论。
+
+            {joinOpen && (
+              <form className="hero__join" onSubmit={handleJoin}>
+                <input
+                  className="input"
+                  type="text"
+                  value={joinValue}
+                  placeholder="粘贴主持人发给你的房间链接"
+                  aria-label="房间链接"
+                  onChange={(event) => setJoinValue(event.target.value)}
+                />
+                <button type="submit" className="btn">
+                  进入
+                </button>
+              </form>
+            )}
+
+            {joinError && <p className="feedback feedback--error">{joinError}</p>}
+          </div>
+
+          <div className="hero__clock">
+            <HeroClock />
+            <p className="hero__clock-caption">
+              <span className="dim">房间内所有设备看到的是同一个时间 · 上图为实时演示</span>
             </p>
           </div>
+        </div>
+      </section>
 
-          <div className="hero__actions">
-            <button type="button" className="button" onClick={onOpenDashboard}>
-              进入主持人后台
-            </button>
-            <span className="hero__hint">先开房，再把不同角色链接发给对应成员。</span>
+      {/* ---------------------------------------------------------------- */}
+      <section className="section">
+        <div className="container">
+          <div className="section__head">
+            <div>
+              <h2 className="section__title">四种身份</h2>
+              <p className="section__subtitle">不同的入口，相同的时间。</p>
+            </div>
           </div>
 
-          <div className="hero__stats">
-            {heroStats.map((item) => (
-              <article className="hero__stat" key={item.value}>
-                <strong>{item.value}</strong>
-                <span>{item.label}</span>
+          <div className="role-grid">
+            {ROLES.map((role) => (
+              <article className="role" key={role.id}>
+                <div className="role__head">
+                  <role.Icon className="role__icon" size={22} />
+                  <span className="u-label">{role.label}</span>
+                </div>
+                <h3 className="role__title">{role.title}</h3>
+                <ul className="role__items">
+                  {role.items.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
               </article>
             ))}
           </div>
         </div>
-
-        <aside className="hero__panel">
-          <section className="hero__panel-card hero__panel-card--primary">
-            <div className="hero__panel-title">
-              <strong>一场辩论，三步进入状态</strong>
-              <span>从建房到同步上屏，流程足够直接，也适合现场快速组织。</span>
-            </div>
-
-            <div className="hero__flow">
-              {launchSteps.map((step) => (
-                <article className="hero__flow-step" key={step.index}>
-                  <span className="hero__flow-index">{step.index}</span>
-                  <div className="hero__flow-copy">
-                    <strong>{step.title}</strong>
-                    <span>{step.description}</span>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className="hero__panel-card">
-            <div className="hero__panel-title">
-              <strong>当前版本重点</strong>
-              <span>先把实用性和一致性做好，再继续往更完整的线上辩论体验推进。</span>
-            </div>
-
-            <div className="hero__focus">
-              {focusPoints.map((item) => (
-                <article className="hero__focus-item" key={item.title}>
-                  <span className="hero__focus-dot" aria-hidden="true" />
-                  <div className="hero__focus-copy">
-                    <strong>{item.title}</strong>
-                    <span>{item.description}</span>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        </aside>
       </section>
 
-      <section className="marketing-grid">
-        {featureCards.map((card) => (
-          <article className={`card card--feature card--feature-${card.tone}`} key={card.title}>
-            <span className="card__eyebrow">{card.eyebrow}</span>
-            <h3>{card.title}</h3>
-            <p>{card.description}</p>
-            <span className="card__meta">{card.meta}</span>
-          </article>
-        ))}
+      {/* ---------------------------------------------------------------- */}
+      <section className="section">
+        <div className="container">
+          <div className="section__head">
+            <div>
+              <h2 className="section__title">一个时钟</h2>
+              <p className="section__subtitle">所有人都能在自己的设备上看到同一个时间。</p>
+            </div>
+            <button type="button" className="btn" onClick={() => onNavigate("/guide")}>
+              使用指南
+            </button>
+          </div>
+
+          <div className="pillar-grid">
+            {PILLARS.map((pillar) => (
+              <article className="pillar" key={pillar.id}>
+                <pillar.Icon className="pillar__icon" size={20} />
+                <h3 className="pillar__title">{pillar.title}</h3>
+                <p className="pillar__desc">{pillar.desc}</p>
+              </article>
+            ))}
+          </div>
+        </div>
       </section>
-    </main>
+    </div>
   );
 }

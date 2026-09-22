@@ -14,6 +14,22 @@ export function formatDurationFromMs(milliseconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+/**
+ * 棋钟主读数：MM:SS.CC（分:秒.百分秒）。
+ * 最后两位百分秒是"专业计时器"观感的关键 —— 它让数字真的在走。
+ */
+export function formatClockMs(milliseconds: number): string {
+  const clamped = Math.max(0, milliseconds);
+  const totalSeconds = Math.floor(clamped / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const centiseconds = Math.floor((clamped % 1000) / 10);
+
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(
+    centiseconds,
+  ).padStart(2, "0")}`;
+}
+
 export function formatDateTime(timestamp: number): string {
   return new Intl.DateTimeFormat("zh-CN", {
     month: "2-digit",

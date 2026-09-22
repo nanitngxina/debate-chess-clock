@@ -8,8 +8,10 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/components.css";
 import "./styles/shell.css";
+import "./styles/timer.css";
 import "./styles/editorial.css";
 import "./styles/account.css";
+import "./styles/landing.css";
 import App from "./App";
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

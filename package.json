@@ -9,6 +9,8 @@
     "build": "tsc && vite build",
     "typecheck:worker": "tsc -p tsconfig.worker.json",
     "check": "tsc && tsc -p tsconfig.worker.json",
+    "check:render": "esbuild scripts/render-check.tsx --bundle --platform=node --format=cjs --outfile=.render-check.cjs --jsx=automatic --loader:.css=empty --define:import.meta.env={} && node .render-check.cjs",
+    "check:all": "npm run check && npm run check:render",
     "deploy": "npx wrangler deploy",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
