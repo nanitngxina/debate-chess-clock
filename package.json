@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:worker": "wrangler dev --local --port 8787",
     "build": "tsc && vite build",
     "typecheck:worker": "tsc -p tsconfig.worker.json",
     "check": "tsc && tsc -p tsconfig.worker.json",

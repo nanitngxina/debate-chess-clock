@@ -18,6 +18,7 @@ interface AccountPanelProps {
 
 const CUSTOM_AVATAR_ID = "custom";
 const UPLOAD_AVATAR_ID = "upload";
+const FALLBACK_DISPLAY_NAME = "未命名旅人";
 
 export function AccountPanel({
   account,
@@ -69,7 +70,7 @@ export function AccountPanel({
     return ACCOUNT_AVATAR_PRESETS.find((preset) => preset.id === avatarChoice)?.avatarUrl ?? "";
   }, [avatarChoice, customAvatarUrl, uploadedAvatarUrl]);
 
-  const previewName = displayName.trim() || account?.displayName || "未命名旅人";
+  const previewName = displayName.trim() || account?.displayName || FALLBACK_DISPLAY_NAME;
   const isGateMode = mode === "gate";
   const title = account
     ? isGateMode
@@ -77,14 +78,19 @@ export function AccountPanel({
       : "编辑出场档案"
     : "创建你的出场档案";
   const description = account
-    ? "这个档案会保存在当前浏览器里，后面进房间会直接带上名字和头像。"
+    ? "这个档案会保存在当前浏览器里，后面进入房间会直接带上名字和头像。"
     : "像游戏开局创建角色一样，先选一个名字和形象。这里不需要密码。";
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
 
+    const normalizedDisplayName = displayName.trim() || account?.displayName?.trim() || FALLBACK_DISPLAY_NAME;
+    if (!displayName.trim()) {
+      setDisplayName(normalizedDisplayName);
+    }
+
     const input = {
-      displayName: displayName.trim(),
+      displayName: normalizedDisplayName,
       avatarUrl: resolvedAvatarUrl,
     };
 
@@ -227,9 +233,7 @@ export function AccountPanel({
               />
 
               {avatarChoice === UPLOAD_AVATAR_ID && (
-                <p className="account-panel__upload-tip">
-                  已启用本地上传头像。再次点击“上传头像”可以替换图片。
-                </p>
+                <p className="account-panel__upload-tip">已启用本地上传头像。再次点击“上传头像”可以替换图片。</p>
               )}
 
               {avatarChoice === CUSTOM_AVATAR_ID && (

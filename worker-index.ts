@@ -16,68 +16,72 @@ const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 
 const worker: ExportedHandler<WorkerEnv> = {
   async fetch(request, env) {
-    const url = new URL(request.url);
+    try {
+      const url = new URL(request.url);
 
-    if (url.pathname === "/api/admin/login" && request.method === "POST") {
-      return handleAdminLogin(request, env);
-    }
-
-    if (url.pathname === "/api/accounts/register" && request.method === "POST") {
-      return handleAccountRegister(request, env);
-    }
-
-    if (url.pathname === "/api/accounts/me" && request.method === "GET") {
-      return handleAccountMe(request, env);
-    }
-
-    if (url.pathname === "/api/accounts/me" && request.method === "PUT") {
-      return handleAccountUpdate(request, env);
-    }
-
-    if (url.pathname === "/api/admin/rooms" && request.method === "GET") {
-      const adminError = await requireAdmin(request, env);
-      if (adminError) {
-        return adminError;
+      if (url.pathname === "/api/admin/login" && request.method === "POST") {
+        return await handleAdminLogin(request, env);
       }
 
-      return handleAdminRoomsList(env);
-    }
-
-    if (url.pathname === "/api/admin/rooms" && request.method === "POST") {
-      const adminError = await requireAdmin(request, env);
-      if (adminError) {
-        return adminError;
+      if (url.pathname === "/api/accounts/register" && request.method === "POST") {
+        return await handleAccountRegister(request, env);
       }
 
-      return handleAdminCreateRoom(request, env, url.origin);
-    }
-
-    if (request.method === "DELETE" && url.pathname.startsWith("/api/admin/rooms/")) {
-      const adminError = await requireAdmin(request, env);
-      if (adminError) {
-        return adminError;
+      if (url.pathname === "/api/accounts/me" && request.method === "GET") {
+        return await handleAccountMe(request, env);
       }
 
-      return handleAdminDeleteRoom(request, env, url.origin);
-    }
+      if (url.pathname === "/api/accounts/me" && request.method === "PUT") {
+        return await handleAccountUpdate(request, env);
+      }
 
-    if (url.pathname.startsWith("/api/rooms/")) {
-      return proxyRoomRequest(request, env);
-    }
+      if (url.pathname === "/api/admin/rooms" && request.method === "GET") {
+        const adminError = await requireAdmin(request, env);
+        if (adminError) {
+          return adminError;
+        }
 
-    const assetResponse = await env.ASSETS.fetch(request);
-    if (assetResponse.status !== 404 || !shouldServeAppShell(request, url)) {
-      return assetResponse;
-    }
+        return handleAdminRoomsList(env);
+      }
 
-    return env.ASSETS.fetch(new Request(new URL("/", request.url).toString(), request));
+      if (url.pathname === "/api/admin/rooms" && request.method === "POST") {
+        const adminError = await requireAdmin(request, env);
+        if (adminError) {
+          return adminError;
+        }
+
+        return await handleAdminCreateRoom(request, env, url.origin);
+      }
+
+      if (request.method === "DELETE" && url.pathname.startsWith("/api/admin/rooms/")) {
+        const adminError = await requireAdmin(request, env);
+        if (adminError) {
+          return adminError;
+        }
+
+        return await handleAdminDeleteRoom(request, env, url.origin);
+      }
+
+      if (url.pathname.startsWith("/api/rooms/")) {
+        return await proxyRoomRequest(request, env);
+      }
+
+      const assetResponse = await env.ASSETS.fetch(request);
+      if (assetResponse.status !== 404 || !shouldServeAppShell(request, url)) {
+        return assetResponse;
+      }
+
+      return env.ASSETS.fetch(new Request(new URL("/", request.url).toString(), request));
+    } catch (error) {
+      return internalError(error);
+    }
   },
 };
 
 export default worker;
 
 async function handleAdminLogin(request: Request, env: WorkerEnv): Promise<Response> {
-  const payload = (await request.json()) as { password?: string };
+  const payload = await readJsonBody<{ password?: string }>(request);
   if (!payload.password || payload.password !== env.HOST_ADMIN_PASSWORD) {
     return json({ error: "后台口令错误" }, 401);
   }
@@ -89,7 +93,7 @@ async function handleAdminLogin(request: Request, env: WorkerEnv): Promise<Respo
 }
 
 async function handleAccountRegister(request: Request, env: WorkerEnv): Promise<Response> {
-  const payload = (await request.json()) as Partial<AccountInput>;
+  const payload = await readJsonBody<Partial<AccountInput>>(request);
   const displayName = sanitizeDisplayName(payload.displayName);
 
   if (!displayName) {
@@ -131,7 +135,7 @@ async function handleAccountUpdate(request: Request, env: WorkerEnv): Promise<Re
     return account;
   }
 
-  const payload = (await request.json()) as Partial<AccountInput>;
+  const payload = await readJsonBody<Partial<AccountInput>>(request);
   const displayName = sanitizeDisplayName(payload.displayName);
 
   if (!displayName) {
@@ -168,7 +172,7 @@ async function handleAdminCreateRoom(
   env: WorkerEnv,
   origin: string,
 ): Promise<Response> {
-  const input = (await request.json()) as CreateRoomInput;
+  const input = await readJsonBody<CreateRoomInput>(request);
   const roomId = createRoomId();
   const roomIdRef = env.ROOMS.idFromName(roomId);
   const stub = env.ROOMS.get(roomIdRef);
@@ -178,15 +182,15 @@ async function handleAdminCreateRoom(
     origin,
   };
 
-  const response = await stub.fetch(new Request(`${origin}/admin/create`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  }));
-
-  return response;
+  return stub.fetch(
+    new Request(`${origin}/admin/create`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 async function handleAdminDeleteRoom(
@@ -355,6 +359,19 @@ async function sign(data: string, secret: string): Promise<string> {
   return base64UrlEncode(new Uint8Array(signature));
 }
 
+async function readJsonBody<T>(request: Request): Promise<T> {
+  const text = await request.clone().text();
+  if (!text) {
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("请求体不是合法 JSON");
+  }
+}
+
 function base64UrlEncode(bytes: Uint8Array): string {
   let binary = "";
   bytes.forEach((byte) => {
@@ -380,6 +397,11 @@ function json(body: unknown, status = 200): Response {
       Pragma: "no-cache",
     },
   });
+}
+
+function internalError(error: unknown): Response {
+  const message = error instanceof Error ? error.message : "Unknown worker error";
+  return json({ error: `Worker internal error: ${message}` }, 500);
 }
 
 function shouldServeAppShell(request: Request, url: URL): boolean {

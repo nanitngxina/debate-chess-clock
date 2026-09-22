@@ -20,6 +20,33 @@ function buildUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
+function truncateText(value: string, limit = 200): string {
+  return value.length > limit ? `${value.slice(0, limit)}...` : value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+async function readResponseBody(
+  response: Response,
+): Promise<{ text: string; json: unknown; hasJson: boolean }> {
+  const text = await response.text();
+  if (!text) {
+    return { text: "", json: null, hasJson: false };
+  }
+
+  try {
+    return {
+      text,
+      json: JSON.parse(text) as unknown,
+      hasJson: true,
+    };
+  } catch {
+    return { text, json: null, hasJson: false };
+  }
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
@@ -47,22 +74,27 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     clearTimeout(timeoutId);
   }
 
+  const body = await readResponseBody(response);
+
   if (!response.ok) {
-    const fallback = `请求失败：${response.status}`;
+    const fallback = `请求失败（${response.status}）`;
 
-    try {
-      const payload = (await response.json()) as { error?: string };
-      throw new Error(payload.error ?? fallback);
-    } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-
-      throw new Error(fallback);
+    if (body.hasJson && isRecord(body.json) && typeof body.json.error === "string" && body.json.error) {
+      throw new Error(body.json.error);
     }
+
+    if (body.text) {
+      throw new Error(truncateText(body.text));
+    }
+
+    throw new Error(fallback);
   }
 
-  return (await response.json()) as T;
+  if (!body.hasJson) {
+    throw new Error(`服务端返回了非 JSON 响应（${response.status}），请检查本地 API 是否已启动`);
+  }
+
+  return body.json as T;
 }
 
 export function buildEventsUrl(
