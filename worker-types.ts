@@ -7,8 +7,12 @@ export interface WorkerEnv {
   ROOM_DIRECTORY: KVNamespace;
   /** 账号数据库（D1）——账号、会话、验证码、限流、发信记录 */
   DB: D1Database;
-  /** 头像对象存储（R2）——账号里只存 URL，不再存 data URL */
-  AVATARS: R2Bucket;
+  /**
+   * 头像对象存储（R2）—— **可选**。
+   * R2 需要在 Cloudflare 后台手动开通（错误码 10042），未开通时为 undefined：
+   * 此时头像上传接口返回 503，其余功能（房间/计时/语音/弹幕/账号）完全不受影响。
+   */
+  AVATARS?: R2Bucket;
   HOST_ADMIN_PASSWORD: string;
   ADMIN_SESSION_SECRET: string;
 

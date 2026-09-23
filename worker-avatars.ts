@@ -105,6 +105,11 @@ export async function saveAvatarObject(
   bytes: Uint8Array,
   mimeType: string,
 ): Promise<string> {
+  const bucket = env.AVATARS;
+  if (!bucket) {
+    throw new Error("头像存储（R2）未配置");
+  }
+
   const extension = extensionForMimeType(mimeType);
   if (!extension) {
     throw new Error(`不支持的头像类型：${mimeType}`);
@@ -112,7 +117,7 @@ export async function saveAvatarObject(
 
   const key = buildAvatarObjectKey(accountId, extension);
 
-  await env.AVATARS.put(key, bytes, {
+  await bucket.put(key, bytes, {
     httpMetadata: {
       contentType: mimeType,
       cacheControl: "public, max-age=31536000, immutable",
@@ -126,13 +131,17 @@ export async function readAvatarObject(
   env: WorkerEnv,
   key: string,
 ): Promise<R2ObjectBody | null> {
+  if (!env.AVATARS) {
+    return null;
+  }
+
   return env.AVATARS.get(key);
 }
 
 /** 尽力删除旧头像对象；删不掉不影响主流程（最多留一个孤儿对象） */
 export async function deleteAvatarObject(env: WorkerEnv, url: string): Promise<void> {
   const key = parseAvatarObjectKey(url);
-  if (!key) {
+  if (!key || !env.AVATARS) {
     return;
   }
 
