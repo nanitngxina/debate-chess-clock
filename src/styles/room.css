@@ -564,6 +564,36 @@
   flex: 0 0 auto;
 }
 
+/* 正在说话：名字提亮 + 一条真实电平条（读数来自 Web Audio 分析） */
+.voice-member__state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+}
+
+.voice-member--speaking .voice-member__name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.voice-member__level {
+  display: block;
+  width: 42px;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: var(--border-soft);
+  overflow: hidden;
+}
+
+.voice-member__level-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--live);
+  transition: width 100ms linear;
+}
+
 /* ---------------------------------------------------------------------------
    语音成员按身份分组（主持人 / 正方 / 反方 / 观众）
    --------------------------------------------------------------------------- */

@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import { SPEAKING_THRESHOLD } from "../hooks/useVoiceLevels";
+import { useVoiceLevel } from "../lib/voiceLevels";
 import {
   AccountProfile,
   RoomRole,
@@ -43,6 +45,41 @@ const ROLE_GROUPS: { role: RoomRole; label: string }[] = [
   { role: "negative", label: "反方" },
   { role: "viewer", label: "观众" },
 ];
+
+/**
+ * 一个语音成员。
+ *
+ * 单独抽成组件是为了订阅音量：只有这一行会随音量重渲染，
+ * 语音面板和整个房间页都不会跟着动（音量读数每秒十几次）。
+ */
+function VoiceMember({ participant }: { participant: VoiceParticipant }) {
+  const level = useVoiceLevel(participant.clientId);
+  const speaking = !participant.muted && level >= SPEAKING_THRESHOLD;
+
+  return (
+    <li className={`voice-member ${speaking ? "voice-member--speaking" : ""}`}>
+      <span className="voice-member__name">{participant.nickname}</span>
+
+      <span className="voice-member__state">
+        {speaking && (
+          <span className="voice-member__level" aria-hidden="true">
+            <span
+              className="voice-member__level-fill"
+              style={{ width: `${Math.round(Math.min(1, level) * 100)}%` }}
+            />
+          </span>
+        )}
+
+        <StatusBadge
+          tone={speaking ? "live" : participant.muted ? "waiting" : "plain"}
+          marker={participant.muted ? "hollow" : "dot"}
+        >
+          {participant.muted ? "已静音" : speaking ? "正在说话" : "开麦中"}
+        </StatusBadge>
+      </span>
+    </li>
+  );
+}
 
 function getVoiceTitle(role: RoomRole, currentChannel: VoiceChannel): string {
   if (role === "viewer" && currentChannel === "public") {
@@ -254,15 +291,7 @@ export function VoicePanel({
 
                   <ul className="voice-members">
                     {members.map((participant) => (
-                      <li className="voice-member" key={participant.clientId}>
-                        <span className="voice-member__name">{participant.nickname}</span>
-                        <StatusBadge
-                          tone={participant.muted ? "waiting" : "live"}
-                          marker={participant.muted ? "hollow" : "dot"}
-                        >
-                          {participant.muted ? "已静音" : "开麦中"}
-                        </StatusBadge>
-                      </li>
+                      <VoiceMember key={participant.clientId} participant={participant} />
                     ))}
                   </ul>
                 </div>

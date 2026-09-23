@@ -252,6 +252,32 @@
   align-items: center;
 }
 
+/*
+  真的收到声音时：麦克风徽标外扩一圈本方色的光，旁边出现一条电平条。
+  刻意不改成绿色 —— 绿色是 LIVE / 已同步的语义，这里表达的是"这一方正在说话"。
+*/
+.side__status--speaking {
+  box-shadow: 0 0 0 3px var(--side-soft);
+}
+
+.side__level {
+  display: block;
+  width: clamp(36px, 20cqw, 92px);
+  height: 3px;
+  margin-left: var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--border-soft);
+  overflow: hidden;
+}
+
+.side__level-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--side);
+  transition: width 100ms linear;
+}
+
 /* 主读数 */
 .side__digits {
   font-family: var(--font-mono);

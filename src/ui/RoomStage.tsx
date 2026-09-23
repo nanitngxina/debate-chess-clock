@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { useLiveClock } from "../hooks/useLiveClock";
 import { formatDurationFromMs } from "../lib/format";
+import { useSideVoiceLevel } from "../lib/voiceLevels";
 import { DebateSide, PublicRoomState, RoomClockState } from "../shared/types";
 import { isSoundEnabled, playSound } from "../utils/soundUtils";
 import { TimerLab, TimerSideView, urgencyFor } from "./TimerLab";
@@ -71,6 +72,13 @@ export const RoomStage = memo(function RoomStage({
   const ticked = useLiveClock(room.clock, serverOffset);
   const clock = ticked ?? room.clock;
 
+  /*
+    真实语音强度：只有"计时中那一方"的麦克风在响时，它的状态徽标才会亮起来。
+    订阅发生在 store 上（useSideVoiceLevel），所以房间页不会被这个读数带着重渲染。
+  */
+  const affirmativeLevel = useSideVoiceLevel("affirmative");
+  const negativeLevel = useSideVoiceLevel("negative");
+
   const [roundBanner, setRoundBanner] = useState<string | null>(null);
   const previousRoundRef = useRef<number | null>(null);
   const previousRemainingRef = useRef<{ affirmative: number; negative: number } | null>(null);
@@ -135,7 +143,10 @@ export const RoomStage = memo(function RoomStage({
     return () => clearTimeout(id);
   }, [roundBanner]);
 
-  const sides = buildSides(room, clock, only);
+  const sides = buildSides(room, clock, only).map((side) => ({
+    ...side,
+    speakingLevel: side.tone === "aff" ? affirmativeLevel : negativeLevel,
+  }));
 
   // 辩手视角只看自己一方，所以"计时中"要说成"轮到你发言"
   if (only && sides[0]?.active) {

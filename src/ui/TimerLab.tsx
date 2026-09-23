@@ -1,4 +1,5 @@
 import { Fragment, ReactNode } from "react";
+import { SPEAKING_THRESHOLD } from "../hooks/useVoiceLevels";
 import { formatClockMs } from "../lib/format";
 import { StatusBadge, StatusTone } from "./StatusBadge";
 import { IconMic } from "./icons";
@@ -22,6 +23,11 @@ export interface TimerSideView {
   critical?: boolean;
   /** 覆盖默认状态文字 */
   statusLabel?: string;
+  /**
+   * 真实语音强度 0..1（有音量检测时才有）。
+   * 有它才能把"麦克风开着"和"真的在说话"分开。
+   */
+  speakingLevel?: number;
 }
 
 export interface TimerLabProps {
@@ -205,6 +211,7 @@ export function TimerLab({
           {sides.map((side, index) => {
             const ratio =
               side.totalMs > 0 ? Math.max(0, Math.min(1, side.remainingMs / side.totalMs)) : 0;
+            const isSpeaking = (side.speakingLevel ?? 0) >= SPEAKING_THRESHOLD;
 
             return (
               <Fragment key={side.tone}>
@@ -240,11 +247,28 @@ export function TimerLab({
                     <StatusBadge
                       tone={sideTone(side)}
                       marker={side.active ? "none" : "hollow"}
-                      className="side__status"
+                      className={[
+                        "side__status",
+                        side.active && isSpeaking ? "side__status--speaking" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
                     >
                       {side.active && !side.done && <IconMic size={13} />}
                       {statusText(side)}
                     </StatusBadge>
+
+                    {/* 只有真的收到声音时这条电平才动 */}
+                    {side.active && typeof side.speakingLevel === "number" && (
+                      <span className="side__level" aria-hidden="true">
+                        <span
+                          className="side__level-fill"
+                          style={{
+                            width: `${Math.round(Math.min(1, Math.max(0, side.speakingLevel)) * 100)}%`,
+                          }}
+                        />
+                      </span>
+                    )}
                   </div>
 
                   <div className="side__bar">

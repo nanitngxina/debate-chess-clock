@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRoomRealtime } from "./hooks/useRoomRealtime";
 import { useVoiceChat } from "./hooks/useVoiceChat";
+import { useVoiceLevels } from "./hooks/useVoiceLevels";
 import { KeyboardShortcut, useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { sendBarrage, sendReaction, sendRoomCommand } from "./lib/api";
 import { describeConnection, formatRoundLabel } from "./lib/format";
@@ -96,6 +97,21 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
     lastVoiceSignal,
     setPayload,
   });
+
+  /*
+    真实音量检测。读数通过 voiceLevels 小 store 分发，**不进 React state** ——
+    否则每秒十几次的采样会把整个房间页重渲染一遍。
+    sources 必须 memo：否则每次渲染都会重建一堆 AnalyserNode。
+  */
+  const levelSources = useMemo(
+    () => [
+      ...voiceChat.remoteStreams.map((item) => ({ clientId: item.clientId, stream: item.stream })),
+      ...(voiceChat.localStream ? [{ clientId, stream: voiceChat.localStream }] : []),
+    ],
+    [voiceChat.remoteStreams, voiceChat.localStream, clientId],
+  );
+
+  useVoiceLevels(levelSources, voiceChat.participants, voiceChat.isJoined);
 
   useEffect(() => {
     if (!payload || payload.room.roomId === draftSeedRoomId) {

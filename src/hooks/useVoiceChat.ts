@@ -35,6 +35,9 @@ interface PeerRecord {
   pendingCandidates: VoiceIceCandidatePayload[];
 }
 
+/** 稳定的空数组常量：不要用 `?? []`（每次渲染都是新引用，会让依赖它的 effect 反复触发） */
+const EMPTY_PARTICIPANTS: VoiceParticipant[] = [];
+
 function getFallbackNickname(role: RoomRole): string {
   switch (role) {
     case "host":
@@ -104,11 +107,23 @@ export function useVoiceChat({
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<RemoteAudioStream[]>([]);
+  /**
+   * 本地麦克风流。
+   * ref 是为了在回调里同步读写，state 是为了让"音量检测"这类渲染相关的消费者
+   * 能拿到它 —— 两者指向同一个流，赋值处必须同时更新。
+   */
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
 
   const peersRef = useRef(new Map<string, PeerRecord>());
   const localStreamRef = useRef<MediaStream | null>(null);
   const processedSignalIdsRef = useRef(new Set<string>());
-  const allParticipants = payload?.room.voice.participants ?? [];
+  /*
+    必须用模块级常量而不是 `?? []`：
+    payload 还没到的那一小段时间里，`?? []` 每次渲染都会造一个新数组，
+    依赖它的 useMemo / effect 就会每次渲染都重跑，里面的 setRemoteStreams([])
+    又制造新数组 —— 于是形成死循环（React 会报 Maximum update depth exceeded）。
+  */
+  const allParticipants = payload?.room.voice.participants ?? EMPTY_PARTICIPANTS;
   const selfParticipantInAnyChannel = useMemo(
     () => allParticipants.find((participant) => participant.clientId === clientId) ?? null,
     [allParticipants, clientId],
@@ -449,6 +464,7 @@ export function useVoiceChat({
           },
         });
         localStreamRef.current = acquiredStream;
+        setLocalStream(acquiredStream);
       }
 
       const nextPayload = await sendRoomCommand(roomId, {
@@ -469,6 +485,7 @@ export function useVoiceChat({
         acquiredStream.getTracks().forEach((track) => track.stop());
         if (localStreamRef.current === acquiredStream) {
           localStreamRef.current = null;
+          setLocalStream(null);
         }
       }
 
@@ -548,6 +565,7 @@ export function useVoiceChat({
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
         localStreamRef.current = null;
+        setLocalStream(null);
       }
     } catch (leaveError) {
       setError(leaveError instanceof Error ? leaveError.message : "离开公共语音失败。");
@@ -587,7 +605,8 @@ export function useVoiceChat({
   useEffect(() => {
     if (!isJoined) {
       closeAllPeers();
-      setRemoteStreams([]);
+      // 已经是空数组就别再 set 一个新数组：那会让依赖它的 effect 再次触发
+      setRemoteStreams((previousStreams) => (previousStreams.length === 0 ? previousStreams : []));
       return;
     }
 
@@ -646,12 +665,12 @@ export function useVoiceChat({
       }
     };
   }, [closeAllPeers]);
-
   return {
     channel,
     participants,
     publicRequests,
     remoteStreams,
+    localStream,
     joining,
     error,
     isJoined,
