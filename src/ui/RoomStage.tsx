@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { useLiveClock } from "../hooks/useLiveClock";
-import { formatDurationFromMs, formatRoundLabel } from "../lib/format";
+import { formatDurationFromMs } from "../lib/format";
 import { DebateSide, PublicRoomState, RoomClockState } from "../shared/types";
 import { isSoundEnabled, playSound } from "../utils/soundUtils";
 import { TimerLab, TimerSideView, urgencyFor } from "./TimerLab";
@@ -24,8 +24,6 @@ interface RoomStageProps {
   serverOffset: number;
   /** 只显示某一方（辩手视角） */
   only?: DebateSide;
-  /** 状态条右侧是否显示 Running / Paused（主持人视角用） */
-  showRunState?: boolean;
   /** 父级插入的横幅（例如切换发言方的 Switching…），优先于回合横幅 */
   overrideBanner?: string | null;
 }
@@ -68,7 +66,6 @@ export const RoomStage = memo(function RoomStage({
   room,
   serverOffset,
   only,
-  showRunState,
   overrideBanner,
 }: RoomStageProps) {
   const ticked = useLiveClock(room.clock, serverOffset);
@@ -146,28 +143,19 @@ export const RoomStage = memo(function RoomStage({
   }
 
   const opponentMs = only === "negative" ? affirmativeMs : negativeMs;
-  const speakerName =
-    clock.activeSide === "affirmative" ? room.sides.affirmativeName : room.sides.negativeName;
 
   return (
     <TimerLab
       variant={only ? "solo" : "room"}
       isLive={clock.isRunning}
-      roundLabel={formatRoundLabel(clock.currentRound, room.config.maxRounds)}
+      hasStarted={room.clock.activeSide !== null || room.roundHistory.length > 0}
+      stageLabel={room.topic}
+      roundProgress={{ current: clock.currentRound, max: room.config.maxRounds }}
       totalLabel={formatDurationFromMs(clock.totalRemainingMs)}
       sides={sides}
       banner={overrideBanner ?? roundBanner}
-      statusExtra={showRunState ? <span>{clock.isRunning ? "Running" : "Paused"}</span> : undefined}
       foot={
-        only ? (
-          <span className="dim">对手剩余 {formatDurationFromMs(opponentMs)}</span>
-        ) : (
-          <div className="row row--wrap">
-            {clock.activeSide && (
-              <span className="pill pill--plain">当前发言 · {speakerName}</span>
-            )}
-          </div>
-        )
+        only ? <span className="dim">对手剩余 {formatDurationFromMs(opponentMs)}</span> : undefined
       }
     />
   );

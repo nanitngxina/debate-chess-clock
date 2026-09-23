@@ -211,9 +211,9 @@ const cases: Case[] = [
       renderToString(
         createElement(TimerLab, {
           variant: "room",
-          phaseLabel: "自由辩论",
+          stageLabel: "自由辩论",
           roundLabel: "Round 03 / 06",
-          elapsedLabel: "01:24:32",
+          roundProgress: { current: 3, max: 6 },
           totalLabel: "12:34",
           sides: [
             { tone: "aff", label: "正方", remainingMs: 522_310, totalMs: 600_000, active: true },
@@ -221,7 +221,8 @@ const cases: Case[] = [
           ],
         }),
       ),
-    expect: ["08:42.31", "06:17.82", "计时中", "等待", "12:34", "Total time"],
+    // 当前发言方：焦点徽标 + 麦克风状态；等待方：空心圈 + 等待中；中间是 VS
+    expect: ["08:42.31", "06:17.82", "计时中", "等待", "12:34", "Total time", "当前发言", "VS"],
   },
   {
     name: "room-stage",
@@ -234,7 +235,7 @@ const cases: Case[] = [
       renderToString(
         createElement(RoomStage, { room: fakeRoom, serverOffset: 0, showRunState: true }),
       ),
-    expect: ["Round 03 / 06", "正方甲", "反方乙", "当前发言", "Running", "Total time"],
+    expect: ["示范辩题", "正方甲", "反方乙", "当前发言", "Live", "Total time"],
   },
   {
     name: "room-stage-solo",

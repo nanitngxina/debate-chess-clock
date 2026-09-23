@@ -41,6 +41,57 @@
   justify-content: center;
 }
 
+/* ---------------------------------------------------------------------------
+   顶部信息条上的「谁在房间里」
+   ---------------------------------------------------------------------------
+   只有人数、没有头像：房间里连着的人不一定加入了语音，payload 里也没有他们的
+   头像地址，凭空造出来就是假数据。
+   --------------------------------------------------------------------------- */
+
+.presence {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.presence__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.presence__dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: var(--r-pill);
+  background: var(--border-strong);
+}
+
+.presence__item--host .presence__dot {
+  background: var(--warn);
+}
+
+.presence__item--aff .presence__dot {
+  background: var(--affirmative);
+}
+
+.presence__item--neg .presence__dot {
+  background: var(--negative);
+}
+
+.presence__item--viewer .presence__dot {
+  background: var(--audience);
+}
+
+.presence__count {
+  font-weight: 600;
+  color: var(--text);
+}
+
 .room-bar__group--end {
   margin-left: auto;
 }

@@ -5,7 +5,6 @@ import { KeyboardShortcut, useKeyboardShortcuts } from "./hooks/useKeyboardShort
 import { sendBarrage, sendRoomCommand } from "./lib/api";
 import {
   describeConnection,
-  describeRole,
   describeSide,
   formatDateTime,
   formatRoundLabel,
@@ -16,7 +15,9 @@ import { AccountProfile, BarrageMessage, PublicRoomState, RoomCommand, RoomRole 
 import { BarragePanel } from "./ui/BarragePanel";
 import { BrandMark } from "./ui/BrandMark";
 import { LinkStack } from "./ui/LinkStack";
+import { RoomPresence } from "./ui/RoomPresence";
 import { RoomStage } from "./ui/RoomStage";
+import { StatusBadge } from "./ui/StatusBadge";
 import { RulesEditor } from "./ui/RulesEditor";
 import { ShortcutHints } from "./ui/ShortcutHints";
 import { VoicePanel } from "./ui/VoicePanel";
@@ -309,20 +310,23 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
           <span className="room-bar__id" title={room.roomId}>
             Room {shortRoomId(room.roomId)}
           </span>
-          <span className={`pill ${connection === "live" ? "pill--live" : "pill--warn"}`}>
-            {connection === "live" && <span className="dot dot--live" />}
+          <StatusBadge
+            tone={connection === "live" ? "live" : "paused"}
+            marker={connection === "live" ? "dot" : "pause"}
+          >
             {connection === "live" ? "Live" : describeConnection(connection)}
-          </span>
+          </StatusBadge>
         </div>
 
+        {/* 谁在房间里：按身份的人数，直接来自连接表 */}
         <div className="room-bar__group room-bar__group--center">
-          <span className="room-bar__topic">{room.topic}</span>
-          <span className="dim nowrap">{roundLabel}</span>
+          <RoomPresence onlineByRole={payload.onlineByRole} />
         </div>
 
         <div className="room-bar__group room-bar__group--end">
-          <span className="pill pill--plain">{describeRole(role)}</span>
-          <span className="pill pill--plain">{payload.onlineCount} 人在线</span>
+          <span className="pill pill--plain nowrap">{roundLabel}</span>
+          {connection === "live" && <StatusBadge tone="live">所有设备已同步</StatusBadge>}
+          <span className="pill pill--plain nowrap">{payload.onlineCount} 人在线</span>
         </div>
       </div>
     </header>
@@ -347,12 +351,7 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
         {feedbackBar}
 
         <div className="container room__stage">
-          <RoomStage
-            room={room}
-            serverOffset={serverOffset}
-            showRunState
-            overrideBanner={stageBanner}
-          />
+          <RoomStage room={room} serverOffset={serverOffset} overrideBanner={stageBanner} />
 
           <section
             className="deck"
