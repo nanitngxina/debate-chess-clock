@@ -39,6 +39,8 @@ export interface TimerLabProps {
    * 只看 isRunning 的话，暂停中的比赛会被误标成 Standby。
    */
   hasStarted?: boolean;
+  /** 比赛是否已经结束（结束后状态徽标显示 Ended） */
+  isFinished?: boolean;
   /**
    * 舞台正中的标题。房间页放的是**本场辩题**（真实数据）。
    * 数据模型里目前没有"环节"概念，所以不编一个"自由辩论"出来 ——
@@ -167,6 +169,7 @@ export function TimerLab({
   variant = "room",
   isLive = true,
   hasStarted = false,
+  isFinished = false,
   stageLabel,
   roundLabel,
   roundProgress,
@@ -176,11 +179,13 @@ export function TimerLab({
   foot,
   banner,
 }: TimerLabProps) {
-  const stageStatus = isLive
-    ? { tone: "live" as const, marker: "dot" as const, label: "Live" }
-    : hasStarted
-      ? { tone: "paused" as const, marker: "pause" as const, label: "Paused" }
-      : { tone: "plain" as const, marker: "hollow" as const, label: "Standby" };
+  const stageStatus = isFinished
+    ? { tone: "plain" as const, marker: "hollow" as const, label: "Ended" }
+    : isLive
+      ? { tone: "live" as const, marker: "dot" as const, label: "Live" }
+      : hasStarted
+        ? { tone: "paused" as const, marker: "pause" as const, label: "Paused" }
+        : { tone: "plain" as const, marker: "hollow" as const, label: "Standby" };
 
   return (
     <div className={`timer-lab timer-lab--${variant}`}>

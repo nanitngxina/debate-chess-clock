@@ -227,6 +227,25 @@ export function syncRoomState(room: RoomState, now: number): RoomState {
   };
 }
 
+/**
+ * 比赛是否已经结束。
+ *
+ * 三种情况：全场总时长走完、打满了赛制约定的回合数、或者双方时间都用尽。
+ * 注意：**不判断"谁赢了"** —— 当前业务逻辑里没有正式的胜负判定，
+ * 所以界面只呈现事实（各自剩多少、打了几个回合），不编输赢。
+ */
+export function isMatchFinished(clock: RoomClockState, config: RoomConfig): boolean {
+  if (clock.totalRemainingMs <= 0) {
+    return true;
+  }
+
+  if (config.maxRounds > 0 && clock.currentRound > config.maxRounds) {
+    return true;
+  }
+
+  return clock.affirmativeRemainingMs <= 0 && clock.negativeRemainingMs <= 0;
+}
+
 export function validateToken(room: RoomState, role: RoomRole, token: string): boolean {
   return room.tokens[role] === token;
 }

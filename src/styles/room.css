@@ -406,6 +406,97 @@
 }
 
 /* ---------------------------------------------------------------------------
+   比赛结束态
+   ---------------------------------------------------------------------------
+   只呈现事实（各自剩余时间、打了几个回合），不显示"谁赢了"。
+   --------------------------------------------------------------------------- */
+
+.match-end {
+  display: grid;
+  gap: var(--sp-4);
+  margin-top: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--panel-1);
+}
+
+.match-end__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.match-end__label {
+  font-family: var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.match-end__rounds {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.match-end__sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+.match-end__side {
+  display: grid;
+  gap: var(--sp-1);
+  padding-left: var(--sp-3);
+  border-left: 2px solid var(--border-strong);
+}
+
+.match-end__side--aff {
+  border-left-color: var(--affirmative);
+}
+
+.match-end__side--neg {
+  border-left-color: var(--negative);
+}
+
+.match-end__side-name {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.match-end__dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: var(--r-pill);
+  background: var(--border-strong);
+}
+
+.match-end__side--aff .match-end__dot {
+  background: var(--affirmative);
+}
+
+.match-end__side--neg .match-end__dot {
+  background: var(--negative);
+}
+
+.match-end__side-value {
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.match-end__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* ---------------------------------------------------------------------------
    比赛事件时间线
    --------------------------------------------------------------------------- */
 
@@ -707,5 +798,9 @@
   .deck__custom .input {
     flex: 1 1 auto;
     width: auto;
+  }
+
+  .match-end__sides {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

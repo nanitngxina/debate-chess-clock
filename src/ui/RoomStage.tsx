@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { useLiveClock } from "../hooks/useLiveClock";
 import { formatDurationFromMs } from "../lib/format";
 import { useSideVoiceLevel } from "../lib/voiceLevels";
+import { isMatchFinished } from "../shared/engine";
 import { DebateSide, PublicRoomState, RoomClockState } from "../shared/types";
 import { isSoundEnabled, playSound } from "../utils/soundUtils";
 import { TimerLab, TimerSideView, urgencyFor } from "./TimerLab";
@@ -160,6 +161,7 @@ export const RoomStage = memo(function RoomStage({
       variant={only ? "solo" : "room"}
       isLive={clock.isRunning}
       hasStarted={room.clock.activeSide !== null || room.roundHistory.length > 0}
+      isFinished={isMatchFinished(clock, room.config)}
       stageLabel={room.topic}
       roundProgress={{ current: clock.currentRound, max: room.config.maxRounds }}
       totalLabel={formatDurationFromMs(clock.totalRemainingMs)}

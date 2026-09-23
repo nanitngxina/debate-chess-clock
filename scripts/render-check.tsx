@@ -18,6 +18,7 @@ import { AppHeader } from "../src/ui/AppHeader";
 import { AccountPanel } from "../src/ui/AccountPanel";
 import { AuthPanel } from "../src/ui/AuthPanel";
 import { BarragePanel } from "../src/ui/BarragePanel";
+import { MatchEnd } from "../src/ui/MatchEnd";
 import { MatchLog } from "../src/ui/MatchLog";
 import { RoomStage } from "../src/ui/RoomStage";
 import { ShortcutHints } from "../src/ui/ShortcutHints";
@@ -377,6 +378,25 @@ const cases: Case[] = [
         }),
       ),
     expect: ["比赛事件", "主持人开始比赛", "正方结束回合", "自动加时 +30 秒", "观众小明"],
+  },
+  {
+    name: "match-end",
+    // 结束态只给事实，不给胜负判断
+    render: () =>
+      renderToString(
+        createElement(MatchEnd, {
+          sides: [
+            { side: "affirmative", label: "正方", name: "李明", remainingMs: 92_000 },
+            { side: "negative", label: "反方", name: "王芳", remainingMs: 47_000 },
+          ],
+          rounds: 6,
+          canRestart: true,
+          onViewLog: noop,
+          onRestart: noop,
+          onShare: noop,
+        }),
+      ),
+    expect: ["Match end", "正方", "反方", "6 回合", "查看比赛记录", "重新开始", "分享比赛"],
   },
   {
     name: "room-invalid-link",

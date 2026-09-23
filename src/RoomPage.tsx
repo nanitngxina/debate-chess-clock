@@ -6,11 +6,12 @@ import { KeyboardShortcut, useKeyboardShortcuts } from "./hooks/useKeyboardShort
 import { sendBarrage, sendReaction, sendRoomCommand } from "./lib/api";
 import { describeConnection, formatRoundLabel } from "./lib/format";
 import { DEFAULT_ROOM_INPUT, MAX_BARRAGE_ITEMS } from "./shared/defaults";
-import { cloneConfig, minutesToSeconds, secondsToMinutes } from "./shared/engine";
+import { cloneConfig, isMatchFinished, minutesToSeconds, secondsToMinutes } from "./shared/engine";
 import { AccountProfile, BarrageMessage, ReactionKey, RoomCommand, RoomRole } from "./shared/types";
 import { BarragePanel } from "./ui/BarragePanel";
 import { BrandMark } from "./ui/BrandMark";
 import { LinkStack } from "./ui/LinkStack";
+import { MatchEnd } from "./ui/MatchEnd";
 import { MatchLog } from "./ui/MatchLog";
 import { RoomPresence } from "./ui/RoomPresence";
 import { RoomStage } from "./ui/RoomStage";
@@ -197,6 +198,18 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
     }
   };
 
+  /* 分享：优先发观众链接（房间里其他人拿到的就是同一条实时链接） */
+  const handleShareMatch = async () => {
+    const link = payload?.links?.viewer ?? window.location.href;
+
+    try {
+      await navigator.clipboard.writeText(link);
+      setFeedback("观众链接已复制，发给别人即可观看这场比赛。");
+    } catch {
+      setFeedback(`复制失败，请手动复制：${link}`);
+    }
+  };
+
   /* -------------------------------------------------------------- 快捷键 */
   /*
    * 只在焦点不落在任何控件上时生效（见 useKeyboardShortcuts）。
@@ -323,6 +336,48 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
   const isHostView = payload.permissions.canModerate;
   const isViewer = role === "viewer";
 
+  /*
+    比赛结束态。判断放在引擎里（纯函数），这里只负责渲染。
+    结束时不显示"谁赢了" —— 赛制里没有正式胜负判定。
+  */
+  const matchFinished = isMatchFinished(clock, room.config);
+  const completedRounds = new Set(room.roundHistory.map((record) => record.round)).size;
+
+  const matchEndElement = matchFinished ? (
+    <MatchEnd
+      sides={[
+        {
+          side: "affirmative",
+          label: "正方",
+          name: room.sides.affirmativeName,
+          remainingMs: clock.affirmativeRemainingMs,
+        },
+        {
+          side: "negative",
+          label: "反方",
+          name: room.sides.negativeName,
+          remainingMs: clock.negativeRemainingMs,
+        },
+      ]}
+      rounds={completedRounds}
+      canRestart={isHostView}
+      restarting={pendingAction === "reset"}
+      onViewLog={() => {
+        document
+          .querySelector(".match-log")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }}
+      onRestart={() => {
+        if (window.confirm("重新开始会清空当前计时与回合记录，确定吗？")) {
+          void runCommand({ type: "reset" }, "reset");
+        }
+      }}
+      onShare={() => {
+        void handleShareMatch();
+      }}
+    />
+  ) : null;
+
   const roomBar = (
     <header className="room-bar">
       <div className="container room-bar__inner">
@@ -373,6 +428,8 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
 
         <div className="container room__stage">
           <RoomStage room={room} serverOffset={serverOffset} overrideBanner={stageBanner} />
+
+          {matchEndElement}
 
           <section
             className="deck"
@@ -798,7 +855,11 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
 
       <div className="container room__stage">
         {isViewer ? (
-          <RoomStage room={room} serverOffset={serverOffset} overrideBanner={stageBanner} />
+          <>
+            <RoomStage room={room} serverOffset={serverOffset} overrideBanner={stageBanner} />
+
+            {matchEndElement}
+          </>
         ) : (
           <>
             <RoomStage
@@ -807,6 +868,8 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
               only={soloSide}
               overrideBanner={stageBanner}
             />
+
+            {matchEndElement}
 
             <div
               className="debater-deck"
