@@ -1,8 +1,14 @@
 /* ===========================================================================
    首页 Landing
    ---------------------------------------------------------------------------
-   Hero = 赛事转播主画面：只有正方计时器、反方计时器、比赛状态三样东西。
-   产品说明文字全部移到下方两节（四种身份 / 一个时钟）。
+   结构（按首页设计稿）：
+     1. Hero  —— 在线辩论赛事主舞台
+        左栏：赛事信息与两个行动按钮
+        中栏：正在走动的棋钟（转播监视器质感）
+        右栏：留空，让背景里的赛场露出来
+     2. Band  —— 一条横向带
+        左半「四种身份 / 各司其职」，右半「一个时钟 / 实时同步」
+   时间永远是第一视觉焦点，其余元素靠留白与细分割线分区。
    =========================================================================== */
 
 .landing {
@@ -10,72 +16,168 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Hero：通栏转播主画面
+   Hero
    --------------------------------------------------------------------------- */
 
 .hero {
   position: relative;
   overflow: hidden;
-  padding-block: var(--sp-6) var(--sp-7);
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, #0b0b0d 0%, var(--bg) 100%);
+  background: linear-gradient(180deg, #0b0e14 0%, var(--bg) 100%);
 }
 
-/* 舞台轮廓：压得很低，绝对不能抢走棋钟 */
-.hero__backdrop {
+/*
+  背景：比赛现场照片。
+  左侧必须压到接近全黑，文字才读得清；右侧保留亮度，让"这是辩论现场"一眼可见。
+*/
+.hero__art {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.4;
+  background-image: url("/hero-arena.jpg");
+  background-size: cover;
+  background-position: 68% 46%;
+  background-repeat: no-repeat;
+  filter: saturate(1.08) brightness(1.06);
 }
 
-.arena-backdrop {
-  width: 100%;
-  height: 100%;
-  display: block;
+.hero__art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(8, 9, 12, 0.96) 0%,
+      rgba(8, 9, 12, 0.92) 28%,
+      rgba(8, 9, 12, 0.64) 50%,
+      rgba(8, 9, 12, 0.12) 76%,
+      rgba(8, 9, 12, 0.04) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(8, 9, 12, 0.86) 0%,
+      rgba(8, 9, 12, 0) 30%,
+      rgba(8, 9, 12, 0.18) 78%,
+      var(--bg) 100%
+    );
 }
 
-.hero__frame-wrap {
+.hero__inner {
   position: relative;
   z-index: 1;
-  max-width: var(--hero-max);
+  padding-block: clamp(32px, 3.6vw, 52px);
 }
 
-/* 左上角品牌角标（转播画面的台标位） */
-.hero__bug {
-  display: inline-flex;
+/* 三栏：文案 / 棋钟 / 留给背景的空白 */
+.hero__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 30fr) minmax(0, 45fr) minmax(0, 25fr);
+  gap: clamp(24px, 3.2vw, 52px);
   align-items: center;
-  gap: var(--sp-2);
-  padding-right: var(--sp-3);
-  margin-right: var(--sp-1);
-  border-right: 1px solid var(--border);
+}
+
+/* --- 左栏：赛事信息 --------------------------------------------------- */
+
+.hero__copy {
+  display: grid;
+  align-content: center;
+}
+
+.hero__eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--affirmative);
+}
+
+.hero__title {
+  display: grid;
+  margin-top: var(--sp-4);
+}
+
+.hero__brand {
+  font-size: clamp(2.8rem, 4.4vw, 4.5rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+}
+
+.hero__tagline {
+  margin-top: var(--sp-2);
+  font-size: clamp(1.45rem, 2.1vw, 2.15rem);
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+
+.hero__roles {
+  margin-top: clamp(18px, 1.8vw, 24px);
+  font-size: var(--fs-base);
+  color: #d3d7dd;
+}
+
+.hero__features {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: var(--sp-3);
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
-.hero__bug-name {
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--text);
+.hero__features li + li {
+  display: flex;
+  align-items: center;
 }
 
-.hero__stage-actions {
+.hero__features li + li::before {
+  content: "|";
+  margin-inline: var(--sp-3);
+  color: var(--border-strong);
+}
+
+.hero__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
+  margin-top: clamp(20px, 2vw, 28px);
 }
 
-.hero__join-bar {
-  position: relative;
-  z-index: 1;
-  margin-top: var(--sp-4);
+/* 首页主行动：设计稿里是品牌蓝，而不是全站通用的白底主按钮 */
+.hero__cta {
+  background: var(--affirmative);
+  border-color: var(--affirmative);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.hero__cta:hover:not(:disabled) {
+  background: #2f74e8;
+  border-color: #2f74e8;
+}
+
+.hero__cta:active:not(:disabled) {
+  background: #2a68d2;
+  border-color: #2a68d2;
+}
+
+.hero__cta-arrow {
+  transition: transform var(--dur) var(--ease);
+}
+
+.hero__cta:hover .hero__cta-arrow {
+  transform: translateX(3px);
 }
 
 .hero__join {
   display: flex;
   gap: var(--sp-2);
-  max-width: 560px;
+  margin-top: var(--sp-4);
+  max-width: 440px;
 }
 
 .hero__join .input {
@@ -83,41 +185,391 @@
   min-width: 0;
 }
 
+/* 右栏：棋钟占据中栏，第三栏留空 */
+.hero__stage {
+  grid-column: 2;
+}
+
 /* ---------------------------------------------------------------------------
-   四种身份：规格表式的三栏，不使用卡片
+   棋钟：转播监视器面板
    --------------------------------------------------------------------------- */
 
-.role-grid {
+.stage {
+  container-type: inline-size;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-xl);
+  background: rgba(9, 11, 15, 0.78);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 30px 70px rgba(0, 0, 0, 0.55);
+}
+
+.stage__status,
+.stage__sides,
+.stage__total {
+  padding-inline: clamp(14px, 2.4cqw, 22px);
+}
+
+/* 顶部状态条：LIVE / 环节 / 回合 / 时间 */
+.stage__status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-block: var(--sp-3);
+  border-bottom: 1px solid var(--border-soft);
+  font-size: var(--fs-xs);
+}
+
+.stage__live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--live);
+}
+
+.stage__live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--live);
+  box-shadow: 0 0 0 3px var(--live-soft);
+}
+
+.stage__status-divider {
+  width: 1px;
+  height: 12px;
+  background: var(--border-strong);
+}
+
+.stage__phase {
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.stage__status-tail {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-left: auto;
+}
+
+.stage__round {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.stage__elapsed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+/* 两个阵营 */
+.stage__sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.stage-side {
+  padding-block: clamp(14px, 2.6cqw, 22px);
+}
+
+.stage-side + .stage-side {
+  padding-left: clamp(14px, 2.4cqw, 22px);
+  border-left: 1px solid var(--border-soft);
+}
+
+.stage-side__label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.stage-side__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: var(--r-pill);
+  flex: 0 0 auto;
+}
+
+.stage-side--aff .stage-side__dot {
+  background: var(--affirmative);
+}
+
+.stage-side--neg .stage-side__dot {
+  border: 2px solid var(--negative);
+}
+
+/* 主读数：时间。整个页面最大的东西 */
+.stage-side__digits {
+  display: flex;
+  align-items: baseline;
+  margin-top: var(--sp-2);
+  font-size: clamp(1.75rem, 10.4cqw, 4.05rem);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.stage-side__centis {
+  font-size: 0.62em;
+  font-weight: 600;
+}
+
+.stage-side--aff .stage-side__centis {
+  color: var(--affirmative);
+}
+
+.stage-side--neg .stage-side__centis {
+  color: var(--negative);
+}
+
+/* 状态文字 + 进度条 */
+.stage-side__status {
+  margin-top: var(--sp-3);
+  font-size: var(--fs-xs);
+}
+
+.stage-side--aff.is-active .stage-side__status {
+  color: var(--affirmative);
+}
+
+.stage-side--neg.is-active .stage-side__status {
+  color: var(--negative);
+}
+
+.stage-side.is-idle .stage-side__status {
+  color: var(--text-muted);
+}
+
+.stage-side.is-urgent .stage-side__status,
+.stage-side.is-critical .stage-side__status,
+.stage-side.is-done .stage-side__status {
+  font-weight: 600;
+  color: var(--warn);
+}
+
+.stage-side.is-critical .stage-side__status,
+.stage-side.is-done .stage-side__status {
+  color: var(--negative);
+}
+
+/* 时间进入告警区时，主读数也变色 —— 转播画面里这就是"要超时了" */
+.stage-side.is-urgent .stage-side__main {
+  color: var(--warn);
+}
+
+.stage-side.is-critical .stage-side__main,
+.stage-side.is-done .stage-side__main {
+  color: var(--negative);
+}
+
+.stage-side__bar {
+  height: 4px;
+  margin-top: var(--sp-3);
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+
+.stage-side__bar span {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  transition: width var(--dur) linear;
+}
+
+.stage-side--aff .stage-side__bar span {
+  background: var(--affirmative);
+}
+
+.stage-side--neg .stage-side__bar span {
+  background: var(--negative);
+}
+
+.stage-side.is-urgent .stage-side__bar span {
+  background: var(--warn);
+}
+
+.stage-side.is-critical .stage-side__bar span,
+.stage-side.is-done .stage-side__bar span {
+  background: var(--negative);
+}
+
+/* 总时长 */
+.stage__total {
+  padding-block: var(--sp-4) var(--sp-3);
+  text-align: center;
+}
+
+.stage__total-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  justify-content: center;
+}
+
+.stage__rule {
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--border-soft);
+}
+
+.stage__total-label {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.stage__total-value {
+  display: block;
+  margin-top: var(--sp-2);
+  font-size: clamp(1.25rem, 4.2cqw, 1.75rem);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.stage__total-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.stage__total-bar span {
+  display: block;
+  height: 100%;
+  background: var(--affirmative);
+  transition: width var(--dur) linear;
+}
+
+/* 回合结束横幅 */
+.stage__banner {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: var(--sp-3) var(--sp-5);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: rgba(9, 11, 15, 0.94);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Band：四种身份 + 一个时钟
+   --------------------------------------------------------------------------- */
+
+.band {
+  border-top: 1px solid var(--border);
+  /* 设计稿里这条带比页面底色略亮一点点，像一块抬起来的面板 */
+  background: linear-gradient(180deg, #0d0e12 0%, var(--bg) 100%);
+  padding-block: clamp(32px, 3.4vw, 44px);
+}
+
+.band__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+  gap: clamp(28px, 3.4vw, 56px);
+  align-items: start;
+}
+
+.band__col--pillars {
+  padding-left: clamp(28px, 3.4vw, 56px);
+  border-left: 1px solid var(--border-soft);
+}
+
+.band__head {
+  margin-bottom: clamp(18px, 2vw, 24px);
+}
+
+.band__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+}
+
+.band__title-sub {
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  color: #cfd3d9;
+}
+
+.band__note {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+/* --- 四种身份 --------------------------------------------------------- */
+
+.role-list {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-top: 1px solid var(--border);
 }
 
 .role {
-  display: grid;
-  gap: var(--sp-3);
-  align-content: start;
-  padding: var(--sp-6) var(--sp-5) var(--sp-5) 0;
-  border-right: 1px solid var(--border-soft);
+  padding-right: clamp(14px, 1.5vw, 22px);
 }
 
-.role:not(:first-child) {
-  padding-left: var(--sp-5);
-}
-
-.role:last-child {
-  border-right: none;
+.role + .role {
+  padding-left: clamp(14px, 1.5vw, 22px);
+  border-left: 1px solid var(--border-soft);
 }
 
 .role__head {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  color: var(--text-muted);
 }
 
-.role:nth-child(2) .role__icon {
-  color: var(--affirmative);
+.role__chip,
+.pillar__chip {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: var(--r-pill);
+}
+
+.role__chip {
+  width: 46px;
+  height: 46px;
+}
+
+.role__chip--host {
+  background: var(--warn-soft);
+  color: #f2b45a;
+}
+
+.role__chip--sides {
+  background: var(--affirmative-soft);
+  color: #6aa6fb;
+}
+
+.role__chip--viewer {
+  background: var(--audience-soft);
+  color: var(--audience);
 }
 
 .role__title {
@@ -125,67 +577,62 @@
   font-weight: 600;
 }
 
-.role__items {
-  display: grid;
-  gap: var(--sp-2);
-  margin-top: var(--sp-1);
-}
-
-.role__items li {
-  position: relative;
-  padding-left: var(--sp-4);
+.role__desc {
+  margin-top: var(--sp-3);
   font-size: var(--fs-sm);
+  line-height: 1.75;
   color: var(--text-muted);
 }
 
-.role__items li::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.72em;
-  width: 6px;
-  height: 1px;
-  background: var(--border-strong);
+.role__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: var(--fs-sm);
+  color: var(--affirmative);
+  transition: gap var(--dur-fast) var(--ease);
 }
 
-/* ---------------------------------------------------------------------------
-   一个时钟：四个要点，极简图标 + 标题 + 一句话
-   --------------------------------------------------------------------------- */
+.role__link:hover {
+  gap: var(--sp-3);
+}
 
-.pillar-grid {
+/* --- 一个时钟 --------------------------------------------------------- */
+
+.pillar-list {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 1px solid var(--border);
 }
 
 .pillar {
-  display: grid;
-  gap: var(--sp-3);
-  align-content: start;
-  padding: var(--sp-6) var(--sp-5) var(--sp-5) 0;
-  border-right: 1px solid var(--border-soft);
+  padding-right: clamp(10px, 1.1vw, 18px);
 }
 
-.pillar:not(:first-child) {
-  padding-left: var(--sp-5);
+.pillar + .pillar {
+  padding-left: clamp(10px, 1.1vw, 18px);
+  border-left: 1px solid var(--border-soft);
 }
 
-.pillar:last-child {
-  border-right: none;
-}
-
-.pillar__icon {
-  color: var(--text-muted);
+.pillar__chip {
+  width: 52px;
+  height: 52px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #c8ccd3;
 }
 
 .pillar__title {
+  margin-top: var(--sp-3);
   font-size: var(--fs-base);
   font-weight: 600;
 }
 
-.pillar__desc {
+.pillar__caption {
+  margin-top: var(--sp-1);
   font-size: var(--fs-sm);
-  line-height: 1.65;
   color: var(--text-muted);
 }
 
@@ -193,56 +640,69 @@
    响应式
    --------------------------------------------------------------------------- */
 
-@media (max-width: 900px) {
-  .hero {
-    padding-block: var(--sp-5) var(--sp-6);
+@media (max-width: 1120px) {
+  /* 窄屏不再需要给背景留空：文案上、棋钟下 */
+  .hero__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-7);
+    justify-items: stretch;
   }
 
-  .pillar-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .hero__stage {
+    grid-column: auto;
+    width: min(640px, 100%);
   }
 
-  .pillar:nth-child(2) {
-    border-right: none;
-    padding-right: 0;
+  .hero__art {
+    background-position: 50% 30%;
+    opacity: 0.75;
+  }
+}
+
+@media (max-width: 1020px) {
+  .band__inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-8);
   }
 
-  .pillar:nth-child(3) {
+  .band__col--pillars {
     padding-left: 0;
-    border-top: 1px solid var(--border-soft);
-  }
-
-  .pillar:nth-child(4) {
+    padding-top: var(--sp-8);
+    border-left: none;
     border-top: 1px solid var(--border-soft);
   }
 }
 
 @media (max-width: 860px) {
-  .role-grid {
+  .role-list {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .role {
-    padding: var(--sp-5) 0;
-    border-right: none;
-    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-block: var(--sp-5);
   }
 
-  .role:not(:first-child) {
+  .role + .role {
     padding-left: 0;
+    border-left: none;
+    border-top: 1px solid var(--border-soft);
   }
 
-  .role:last-child {
-    border-bottom: none;
+  .pillar-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--sp-6);
+  }
+
+  .pillar:nth-child(3) {
+    padding-left: 0;
+    border-left: none;
   }
 }
 
-@media (max-width: 620px) {
-  .hero__stage-actions {
-    width: 100%;
-  }
-
-  .hero__stage-actions .btn {
+@media (max-width: 560px) {
+  .hero__cta,
+  .hero__actions .btn {
     flex: 1 1 100%;
   }
 
@@ -250,17 +710,23 @@
     max-width: 100%;
   }
 
-  .pillar-grid {
+  .pillar-list {
     grid-template-columns: minmax(0, 1fr);
+    row-gap: 0;
   }
 
   .pillar {
-    padding: var(--sp-5) 0;
-    border-right: none;
+    padding-right: 0;
+    padding-block: var(--sp-5);
+  }
+
+  .pillar + .pillar {
+    padding-left: 0;
+    border-left: none;
     border-top: 1px solid var(--border-soft);
   }
 
-  .pillar:first-child {
-    border-top: none;
+  .stage__status-tail .stage__status-divider {
+    display: none;
   }
 }

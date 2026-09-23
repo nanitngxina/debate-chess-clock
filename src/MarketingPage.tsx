@@ -1,13 +1,11 @@
 import { FormEvent, useState } from "react";
-import { ArenaBackdrop } from "./ui/ArenaBackdrop";
-import { BrandMark } from "./ui/BrandMark";
 import { HeroClock } from "./ui/HeroClock";
 import {
   IconAudience,
-  IconBonus,
   IconChat,
-  IconControl,
+  IconCrown,
   IconMic,
+  IconRefresh,
   IconSides,
   IconTimer,
 } from "./ui/icons";
@@ -21,53 +19,32 @@ interface MarketingPageProps {
 const ROLES = [
   {
     id: "host",
-    Icon: IconControl,
+    Icon: IconCrown,
     label: "主持人",
-    title: "掌控比赛节奏",
-    items: ["后台控制比赛", "管理房间", "调整规则", "操作计时"],
+    desc: "后台控制比赛，管理房间，操作计时与规则。",
   },
   {
     id: "sides",
     Icon: IconSides,
     label: "正方 / 反方",
-    title: "只管自己这一方",
-    items: ["专属链接进入", "查看自己的时间", "结束自己的回合", "自己计时时开启麦克风"],
+    desc: "专属链接进入，只能结束自己一方的回合。",
   },
   {
     id: "viewer",
     Icon: IconAudience,
     label: "观众",
-    title: "看比赛，也能参与",
-    items: ["观看比赛", "发送弹幕", "申请上麦", "参与互动"],
+    desc: "观看比赛、发送弹幕、申请上麦，参与互动。",
   },
 ] as const;
 
 const PILLARS = [
-  {
-    id: "timer",
-    Icon: IconTimer,
-    title: "双轨倒计时",
-    desc: "正反方各自计时，同时还有一个总时长在走。",
-  },
-  {
-    id: "bonus",
-    Icon: IconBonus,
-    title: "自动加时",
-    desc: "每回合结束按规则给结束方加时，回合区间可配置。",
-  },
-  {
-    id: "chat",
-    Icon: IconChat,
-    title: "弹幕交流",
-    desc: "观众实时参与，不打断比赛节奏。",
-  },
-  {
-    id: "voice",
-    Icon: IconMic,
-    title: "语音通话",
-    desc: "辩手在自己计时时开麦，观众可申请上麦。",
-  },
+  { id: "timer", Icon: IconTimer, title: "双轨倒计时", caption: "正反方 + 总时长" },
+  { id: "bonus", Icon: IconRefresh, title: "自动加时", caption: "按规则智能加时" },
+  { id: "chat", Icon: IconChat, title: "弹幕交流", caption: "实时互动讨论" },
+  { id: "voice", Icon: IconMic, title: "语音通话", caption: "WebRTC 低延迟" },
 ] as const;
+
+const HERO_FEATURES = ["实时同步", "多端可用", "语音互动", "弹幕交流"] as const;
 
 /** 只接受真正的房间链接，避免把随便一个网址跳过去 */
 function normalizeRoomHref(raw: string): string | null {
@@ -110,38 +87,49 @@ export function MarketingPage({ onNavigate, onJoinRoom }: MarketingPageProps) {
     <div className="landing">
       {/* ---------------------------------------------------------------- */}
       {/*
-        Hero = 赛事转播主画面。
-        只保留三样东西：正方计时器、反方计时器、比赛状态。
-        产品说明文字全部移除（下方「四种身份 / 一个时钟」两节承担说明职责）。
+        Hero = 在线辩论赛事主舞台。
+        左栏是赛事信息，右栏是正在走的棋钟，背景是比赛现场。
+        三栏栅格（文案 / 棋钟 / 留给背景的空白）让画面右侧始终能露出场地。
       */}
       <section className="hero">
-        {/* 视觉上不显示，但页面需要一个 h1（品牌识别在顶部导航里） */}
-        <h1 className="visually-hidden">八角笼 DEBATE ARENA · 在线辩论赛实时计时平台</h1>
+        <div className="hero__art" aria-hidden="true" />
 
-        <div className="hero__backdrop" aria-hidden="true">
-          <ArenaBackdrop />
-        </div>
+        <div className="container hero__inner">
+          <div className="hero__grid">
+            <div className="hero__copy">
+              <p className="hero__eyebrow">Online Debate Timer</p>
 
-        <div className="container hero__frame-wrap">
-          <HeroClock
-            brand={
-              <span className="hero__bug">
-                <BrandMark size={16} />
-                <span className="hero__bug-name">八角笼</span>
-              </span>
-            }
-            foot={
-              <div className="hero__stage-actions">
+              <h1 className="hero__title">
+                <span className="hero__brand">八角笼</span>
+                <span className="hero__tagline">
+                  让每一场辩论
+                  <br />
+                  拥有一个共同的时间。
+                </span>
+              </h1>
+
+              <p className="hero__roles">主持人 · 正方 · 反方 · 观众</p>
+
+              <ul className="hero__features">
+                {HERO_FEATURES.map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
+
+              <div className="hero__actions">
                 <button
                   type="button"
-                  className="btn btn--primary"
+                  className="btn btn--lg hero__cta"
                   onClick={() => onNavigate("/dashboard")}
                 >
                   创建比赛
+                  <span className="hero__cta-arrow" aria-hidden="true">
+                    →
+                  </span>
                 </button>
                 <button
                   type="button"
-                  className="btn btn--ghost"
+                  className="btn btn--lg btn--ghost"
                   aria-expanded={joinOpen}
                   onClick={() => {
                     setJoinOpen((value) => !value);
@@ -151,85 +139,92 @@ export function MarketingPage({ onNavigate, onJoinRoom }: MarketingPageProps) {
                   进入房间
                 </button>
               </div>
-            }
-          />
-        </div>
 
-        {joinOpen && (
-          <div className="container hero__join-bar">
-            <form className="hero__join" onSubmit={handleJoin}>
-              <input
-                className="input"
-                type="text"
-                value={joinValue}
-                placeholder="粘贴主持人发给你的房间链接"
-                aria-label="房间链接"
-                onChange={(event) => setJoinValue(event.target.value)}
-              />
-              <button type="submit" className="btn">
-                进入
-              </button>
-            </form>
-          </div>
-        )}
+              {joinOpen && (
+                <form className="hero__join" onSubmit={handleJoin}>
+                  <input
+                    className="input"
+                    type="text"
+                    value={joinValue}
+                    placeholder="粘贴主持人发给你的房间链接"
+                    aria-label="房间链接"
+                    onChange={(event) => setJoinValue(event.target.value)}
+                  />
+                  <button type="submit" className="btn">
+                    进入
+                  </button>
+                </form>
+              )}
 
-        {joinError && (
-          <div className="container hero__join-bar">
-            <p className="feedback feedback--error">{joinError}</p>
-          </div>
-        )}
-      </section>
-
-      {/* ---------------------------------------------------------------- */}
-      <section className="section">
-        <div className="container">
-          <div className="section__head">
-            <div>
-              <h2 className="section__title">四种身份</h2>
-              <p className="section__subtitle">不同的入口，相同的时间。</p>
+              {joinError && <p className="feedback feedback--error">{joinError}</p>}
             </div>
-          </div>
 
-          <div className="role-grid">
-            {ROLES.map((role) => (
-              <article className="role" key={role.id}>
-                <div className="role__head">
-                  <role.Icon className="role__icon" size={22} />
-                  <span className="u-label">{role.label}</span>
-                </div>
-                <h3 className="role__title">{role.title}</h3>
-                <ul className="role__items">
-                  {role.items.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </article>
-            ))}
+            {/* 第三列留空：让背景里的赛场一直露在右下方 */}
+            <div className="hero__stage">
+              <HeroClock />
+            </div>
           </div>
         </div>
       </section>
 
       {/* ---------------------------------------------------------------- */}
-      <section className="section">
-        <div className="container">
-          <div className="section__head">
-            <div>
-              <h2 className="section__title">一个时钟</h2>
-              <p className="section__subtitle">所有人都能在自己的设备上看到同一个时间。</p>
+      {/* 一条横向带：左半「四种身份」，右半「一个时钟」 */}
+      <section className="band">
+        <div className="container band__inner">
+          <div className="band__col band__col--roles">
+            <header className="band__head">
+              <h2 className="band__title">
+                四种身份
+                <span className="band__title-sub">各司其职</span>
+              </h2>
+              <p className="band__note">不同的入口，相同的时间</p>
+            </header>
+
+            <div className="role-list">
+              {ROLES.map((role) => (
+                <article className="role" key={role.id}>
+                  <div className="role__head">
+                    <span className={`role__chip role__chip--${role.id}`}>
+                      <role.Icon size={22} />
+                    </span>
+                    <h3 className="role__title">{role.label}</h3>
+                  </div>
+
+                  <p className="role__desc">{role.desc}</p>
+
+                  <button
+                    type="button"
+                    className="role__link"
+                    onClick={() => onNavigate("/guide")}
+                  >
+                    了解更多
+                    <span aria-hidden="true">→</span>
+                  </button>
+                </article>
+              ))}
             </div>
-            <button type="button" className="btn" onClick={() => onNavigate("/guide")}>
-              使用指南
-            </button>
           </div>
 
-          <div className="pillar-grid">
-            {PILLARS.map((pillar) => (
-              <article className="pillar" key={pillar.id}>
-                <pillar.Icon className="pillar__icon" size={20} />
-                <h3 className="pillar__title">{pillar.title}</h3>
-                <p className="pillar__desc">{pillar.desc}</p>
-              </article>
-            ))}
+          <div className="band__col band__col--pillars">
+            <header className="band__head">
+              <h2 className="band__title">
+                一个时钟
+                <span className="band__title-sub">实时同步</span>
+              </h2>
+              <p className="band__note">所有人都能在自己的设备上看到同一个时间。</p>
+            </header>
+
+            <div className="pillar-list">
+              {PILLARS.map((pillar) => (
+                <article className="pillar" key={pillar.id}>
+                  <span className="pillar__chip">
+                    <pillar.Icon size={20} />
+                  </span>
+                  <h3 className="pillar__title">{pillar.title}</h3>
+                  <p className="pillar__caption">{pillar.caption}</p>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </section>
