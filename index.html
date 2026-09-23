@@ -9,6 +9,12 @@
       content="八角笼 · 在线辩论赛实时计时平台。主持人、正方、反方、观众通过不同权限链接进入同一房间，所有设备实时看到完全一致的时间、回合和比赛状态。"
     />
     <title>八角笼 · DEBATE ARENA</title>
+    <!--
+      首屏 Hero 的背景是比赛现场照片，也是这一屏最大的视觉元素。
+      体积已经压到 109KB，但仍是一次网络请求：预先声明可以让它在 CSS 解析到
+      background-image 之前就开始下载，避免首屏先黑一下再"亮出赛场"。
+    -->
+    <link rel="preload" as="image" href="/hero-arena.jpg" fetchpriority="high" />
   </head>
   <body>
     <div id="root"></div>
