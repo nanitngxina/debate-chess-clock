@@ -40,7 +40,6 @@ import {
   deleteAvatarObject,
   detectImageMimeType,
   isOwnAvatarUrl,
-  mimeTypeForObjectKey,
   parseAvatarObjectKey,
   readAvatarObject,
   saveAvatarObject,
@@ -413,8 +412,8 @@ async function handleAvatarUpload(request: Request, env: WorkerEnv): Promise<Res
     return resolved;
   }
 
-  if (!env.AVATARS) {
-    return json({ error: "服务端没有配置头像存储（R2）" }, 503);
+  if (!env.AVATARS && !env.AVATAR_OBJECTS) {
+    return json({ error: "服务端没有配置头像存储" }, 503);
   }
 
   const verdict = await consumeRateLimit(
@@ -469,9 +468,9 @@ async function handleAvatarUpload(request: Request, env: WorkerEnv): Promise<Res
   return json({ avatarUrl });
 }
 
-/** 从 R2 读取头像图片并返回给浏览器 */
+/** 从对象存储（R2 或 KV）读取头像图片并返回给浏览器 */
 async function handleAvatarServe(env: WorkerEnv, pathname: string): Promise<Response> {
-  if (!env.AVATARS) {
+  if (!env.AVATARS && !env.AVATAR_OBJECTS) {
     return json({ error: "未找到该头像" }, 404);
   }
 
@@ -486,15 +485,9 @@ async function handleAvatarServe(env: WorkerEnv, pathname: string): Promise<Resp
   }
 
   const headers = new Headers();
-  headers.set(
-    "Content-Type",
-    object.httpMetadata?.contentType ?? mimeTypeForObjectKey(key),
-  );
+  headers.set("Content-Type", object.contentType);
   // 对象 key 带时间戳+随机串，内容永不变化，可以长缓存
   headers.set("Cache-Control", "public, max-age=31536000, immutable");
-  if (object.httpEtag) {
-    headers.set("ETag", object.httpEtag);
-  }
 
   return new Response(object.body, { headers });
 }

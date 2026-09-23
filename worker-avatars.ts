@@ -1,20 +1,31 @@
 import { WorkerEnv } from "./worker-types";
 
 /**
- * 头像对象存储（R2）。
+ * 头像对象存储。
  *
  * 为什么要有这个模块：
  * 之前头像是把 data URL 直接塞进账号记录的，而服务端有个 5000 字符的上限，
  * 但一张 256x256 的 JPEG 转成 data URL 通常就有 7000 多字符 —— 结果就是
  * 存进去的字符串被从中间截断，头像显示成坏图。
  *
- * 现在改成：图片本体存 R2，账号里只留一个很短的 URL。
+ * 现在改成：图片本体存对象存储，账号里只留一个很短的 URL。
+ *
+ * 后端有两种，上传时优先用 R2，其次 KV；读取时两个都查：
+ *   - R2 需要在后台开通且要求账上有支付方式，暂时用不了；
+ *   - KV 免费、无需绑卡，是当前线上实际使用的后端。
+ * 对调用方来说两者没有区别 —— 都通过下面这三个函数访问。
  */
 
 export const AVATAR_MAX_BYTES = 1024 * 1024;
 
 export const AVATAR_KEY_PREFIX = "avatars/";
 export const AVATAR_URL_PREFIX = "/api/avatars/";
+
+/** 读取头像时统一返回的形状，把 R2 / KV 的差异挡在这个模块内部 */
+export interface AvatarObject {
+  body: ReadableStream;
+  contentType: string;
+}
 
 const EXTENSION_BY_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -106,8 +117,10 @@ export async function saveAvatarObject(
   mimeType: string,
 ): Promise<string> {
   const bucket = env.AVATARS;
-  if (!bucket) {
-    throw new Error("头像存储（R2）未配置");
+  const kv = env.AVATAR_OBJECTS;
+
+  if (!bucket && !kv) {
+    throw new Error("头像存储未配置（R2 与 KV 都没有绑定）");
   }
 
   const extension = extensionForMimeType(mimeType);
@@ -117,12 +130,17 @@ export async function saveAvatarObject(
 
   const key = buildAvatarObjectKey(accountId, extension);
 
-  await bucket.put(key, bytes, {
-    httpMetadata: {
-      contentType: mimeType,
-      cacheControl: "public, max-age=31536000, immutable",
-    },
-  });
+  if (bucket) {
+    await bucket.put(key, bytes, {
+      httpMetadata: {
+        contentType: mimeType,
+        cacheControl: "public, max-age=31536000, immutable",
+      },
+    });
+  } else if (kv) {
+    // KV 没有 httpMetadata，把类型放进自定义 metadata，读取时再取出来
+    await kv.put(key, bytes, { metadata: { contentType: mimeType } });
+  }
 
   return avatarUrlForObjectKey(key);
 }
@@ -130,23 +148,53 @@ export async function saveAvatarObject(
 export async function readAvatarObject(
   env: WorkerEnv,
   key: string,
-): Promise<R2ObjectBody | null> {
-  if (!env.AVATARS) {
-    return null;
+): Promise<AvatarObject | null> {
+  if (env.AVATARS) {
+    const object = await env.AVATARS.get(key);
+    if (object) {
+      return {
+        body: object.body,
+        contentType: object.httpMetadata?.contentType ?? mimeTypeForObjectKey(key),
+      };
+    }
   }
 
-  return env.AVATARS.get(key);
+  if (env.AVATAR_OBJECTS) {
+    const stored = await env.AVATAR_OBJECTS.getWithMetadata<{ contentType?: string }>(
+      key,
+      "arrayBuffer",
+    );
+
+    if (stored.value) {
+      const body = new Response(stored.value).body;
+      if (body) {
+        return {
+          body,
+          contentType: stored.metadata?.contentType ?? mimeTypeForObjectKey(key),
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 /** 尽力删除旧头像对象；删不掉不影响主流程（最多留一个孤儿对象） */
 export async function deleteAvatarObject(env: WorkerEnv, url: string): Promise<void> {
   const key = parseAvatarObjectKey(url);
-  if (!key || !env.AVATARS) {
+  if (!key) {
     return;
   }
 
   try {
-    await env.AVATARS.delete(key);
+    // 两个后端都删：换后端的过程中可能同一个 key 在两边都存在
+    if (env.AVATARS) {
+      await env.AVATARS.delete(key);
+    }
+
+    if (env.AVATAR_OBJECTS) {
+      await env.AVATAR_OBJECTS.delete(key);
+    }
   } catch (error) {
     console.error(`[avatar] 删除旧头像对象失败 key=${key}`, error);
   }
