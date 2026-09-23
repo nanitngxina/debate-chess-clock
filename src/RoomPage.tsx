@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import { useLiveClock } from "./hooks/useLiveClock";
+import { useEffect, useState } from "react";
 import { useRoomRealtime } from "./hooks/useRoomRealtime";
 import { useVoiceChat } from "./hooks/useVoiceChat";
 import { KeyboardShortcut, useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
@@ -9,19 +8,17 @@ import {
   describeRole,
   describeSide,
   formatDateTime,
-  formatDurationFromMs,
   formatRoundLabel,
 } from "./lib/format";
 import { DEFAULT_ROOM_INPUT, MAX_BARRAGE_ITEMS } from "./shared/defaults";
 import { cloneConfig, minutesToSeconds, secondsToMinutes } from "./shared/engine";
-import { AccountProfile, BarrageMessage, PublicRoomState, RoomClockState, RoomCommand, RoomRole } from "./shared/types";
-import { isSoundEnabled, playSound } from "./utils/soundUtils";
+import { AccountProfile, BarrageMessage, PublicRoomState, RoomCommand, RoomRole } from "./shared/types";
 import { BarragePanel } from "./ui/BarragePanel";
 import { BrandMark } from "./ui/BrandMark";
 import { LinkStack } from "./ui/LinkStack";
+import { RoomStage } from "./ui/RoomStage";
 import { RulesEditor } from "./ui/RulesEditor";
 import { ShortcutHints } from "./ui/ShortcutHints";
-import { TimerLab, TimerSideView, urgencyFor } from "./ui/TimerLab";
 import { VoicePanel } from "./ui/VoicePanel";
 
 function readAccessFromQuery(): { role: RoomRole | null; token: string } {
@@ -51,40 +48,6 @@ function formatBonus(seconds: number): string {
   }
 
   return `+${Math.round((seconds / 60) * 10) / 10}min`;
-}
-
-/** 把服务端时钟状态映射成计时组件需要的两个「侧」 */
-function buildSides(
-  room: PublicRoomState,
-  clock: RoomClockState,
-  only?: "affirmative" | "negative",
-): TimerSideView[] {
-  const baseMs = Math.max(1000, room.config.initialTimeSeconds * 1000);
-
-  const make = (side: "affirmative" | "negative"): TimerSideView => {
-    const isAffirmative = side === "affirmative";
-    const remainingMs = isAffirmative ? clock.affirmativeRemainingMs : clock.negativeRemainingMs;
-    const isActiveSide = clock.activeSide === side;
-
-    return {
-      tone: isAffirmative ? "aff" : "neg",
-      label: isAffirmative ? "正方" : "反方",
-      name: isAffirmative ? room.sides.affirmativeName : room.sides.negativeName,
-      remainingMs,
-      totalMs: Math.max(baseMs, remainingMs),
-      active: isActiveSide && clock.isRunning,
-      done: remainingMs <= 0,
-      statusLabel: isActiveSide && !clock.isRunning ? "已暂停" : undefined,
-      // 真实比赛里也一样：最后 30 秒转琥珀、最后 10 秒转红
-      ...urgencyFor(remainingMs),
-    };
-  };
-
-  if (only) {
-    return [make(only)];
-  }
-
-  return [make("affirmative"), make("negative")];
 }
 
 interface RoomPageProps {
@@ -124,7 +87,6 @@ interface RoomPageInnerProps {
 function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
   const { payload, connection, error, refresh, serverOffset, clientId, lastVoiceSignal, setPayload } =
     useRoomRealtime(roomId, role, token);
-  const liveClock = useLiveClock(payload?.room.clock ?? null, serverOffset);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [topicDraft, setTopicDraft] = useState("");
@@ -137,10 +99,6 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
   const [draftSeedRoomId, setDraftSeedRoomId] = useState("");
   const [barrageItems, setBarrageItems] = useState<BarrageMessage[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [banner, setBanner] = useState<string | null>(null);
-  const previousRoundRef = useRef<number | null>(null);
-  const hasObservedClockRef = useRef(false);
-  const previousRemainingRef = useRef<{ affirmative: number; negative: number } | null>(null);
   const accountDisplayName = account?.displayName ?? "";
 
   const voiceChat = useVoiceChat({
@@ -174,76 +132,6 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
 
     setBarrageItems(payload.room.barrage);
   }, [payload]);
-
-  useEffect(() => {
-    if (!payload) {
-      return;
-    }
-
-    const clock = liveClock ?? payload.room.clock;
-    const nextRemaining = {
-      affirmative: clock.affirmativeRemainingMs,
-      negative: clock.negativeRemainingMs,
-    };
-
-    if (!hasObservedClockRef.current) {
-      hasObservedClockRef.current = true;
-      previousRemainingRef.current = nextRemaining;
-      return;
-    }
-
-    const previousRemaining = previousRemainingRef.current;
-    if (!previousRemaining) {
-      previousRemainingRef.current = nextRemaining;
-      return;
-    }
-
-    const affirmativeTimedOut = previousRemaining.affirmative > 0 && nextRemaining.affirmative <= 0;
-    const negativeTimedOut = previousRemaining.negative > 0 && nextRemaining.negative <= 0;
-
-    if ((affirmativeTimedOut || negativeTimedOut) && isSoundEnabled()) {
-      playSound("round-end");
-    }
-
-    previousRemainingRef.current = nextRemaining;
-  }, [liveClock, payload]);
-
-  // 回合变化时给出一次短暂的横幅（ROUND 03 · +30s），把"回合结束 / 自动加时"显性化
-  useEffect(() => {
-    if (!payload) {
-      return;
-    }
-
-    const round = payload.room.clock.currentRound;
-
-    if (previousRoundRef.current === null) {
-      previousRoundRef.current = round;
-      return;
-    }
-
-    if (round === previousRoundRef.current) {
-      return;
-    }
-
-    previousRoundRef.current = round;
-
-    const latest = payload.room.roundHistory[0];
-    const bonus = latest && latest.bonusSeconds > 0 ? ` · +${latest.bonusSeconds}s` : "";
-    setBanner(`Round ${String(round).padStart(2, "0")}${bonus}`);
-  }, [payload]);
-
-  // 横幅只停留一小会儿
-  useEffect(() => {
-    if (!banner) {
-      return;
-    }
-
-    const id = setTimeout(() => setBanner(null), 2200);
-    return () => clearTimeout(id);
-  }, [banner]);
-
-  // 切换发言方时给出 SWITCHING 状态
-  const timerBanner = pendingAction === "switch" ? "Switching…" : banner;
 
   const runCommand = async (command: RoomCommand, actionKey: string) => {
     setPendingAction(actionKey);
@@ -295,7 +183,7 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
    * 注：重置故意不绑快捷键 —— 它会清空回合记录，只保留按钮 + 二次确认。
    */
   const busy = pendingAction !== null;
-  const shortcutClock = payload ? liveClock ?? payload.room.clock : null;
+  const shortcutClock = payload ? payload.room.clock : null;
   const shortcutIsHost = Boolean(payload?.permissions.canModerate);
   const shortcutSide = payload?.permissions.controlledSide ?? null;
   const shortcutCanEndMyTurn = Boolean(
@@ -400,8 +288,12 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
   }
 
   const room = payload.room;
-  const clock = liveClock ?? room.clock;
+  // 注意：这里只用于"能不能点"这类开关判断，用服务端时钟就够（isRunning 只在命令时变）。
+  // 需要按 250ms 走的时间显示在 RoomStage 里，那边自己订阅了 tick。
+  const clock = room.clock;
   const roundLabel = formatRoundLabel(clock.currentRound, room.config.maxRounds);
+  // 切换发言方时给出 SWITCHING 状态（回合横幅由 RoomStage 自己管）
+  const stageBanner = pendingAction === "switch" ? "Switching…" : null;
   const mySide = payload.permissions.controlledSide;
   const canEndMyTurn = Boolean(
     payload.permissions.canEndOwnTurn && mySide && clock.activeSide === mySide,
@@ -455,14 +347,11 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
         {feedbackBar}
 
         <div className="container room__stage">
-          <TimerLab
-            variant="room"
-            isLive={clock.isRunning}
-            roundLabel={roundLabel}
-            totalLabel={formatDurationFromMs(clock.totalRemainingMs)}
-            sides={buildSides(room, clock)}
-            banner={timerBanner}
-            statusExtra={<span>{clock.isRunning ? "Running" : "Paused"}</span>}
+          <RoomStage
+            room={room}
+            serverOffset={serverOffset}
+            showRunState
+            overrideBanner={stageBanner}
           />
 
           <section
@@ -870,11 +759,6 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
   /* ------------------------------------------------------ 辩手 / 观众 */
 
   const soloSide = mySide ?? "affirmative";
-  // 辩手视图只看自己一方，所以"计时中"要说成"轮到你发言"
-  const soloSides = buildSides(room, clock, soloSide);
-  if (soloSides[0]?.active) {
-    soloSides[0].statusLabel = "轮到你发言";
-  }
 
   return (
     <div className={`room ${isViewer ? "room--viewer" : "room--debater"}`}>
@@ -883,45 +767,14 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
 
       <div className="container room__stage">
         {isViewer ? (
-          <TimerLab
-            variant="room"
-            isLive={clock.isRunning}
-            roundLabel={roundLabel}
-            totalLabel={formatDurationFromMs(clock.totalRemainingMs)}
-            sides={buildSides(room, clock)}
-            banner={timerBanner}
-            foot={
-              <div className="row row--wrap">
-                {clock.activeSide && (
-                  <span className="pill pill--plain">
-                    当前发言 ·{" "}
-                    {clock.activeSide === "affirmative"
-                      ? room.sides.affirmativeName
-                      : room.sides.negativeName}
-                  </span>
-                )}
-              </div>
-            }
-          />
+          <RoomStage room={room} serverOffset={serverOffset} overrideBanner={stageBanner} />
         ) : (
           <>
-            <TimerLab
-              variant="solo"
-              isLive={clock.isRunning}
-              roundLabel={roundLabel}
-              totalLabel={formatDurationFromMs(clock.totalRemainingMs)}
-              sides={soloSides}
-              banner={timerBanner}
-              foot={
-                <span className="dim">
-                  对手剩余{" "}
-                  {formatDurationFromMs(
-                    soloSide === "affirmative"
-                      ? clock.negativeRemainingMs
-                      : clock.affirmativeRemainingMs,
-                  )}
-                </span>
-              }
+            <RoomStage
+              room={room}
+              serverOffset={serverOffset}
+              only={soloSide}
+              overrideBanner={stageBanner}
             />
 
             <div

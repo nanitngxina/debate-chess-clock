@@ -18,11 +18,12 @@ import { AppHeader } from "../src/ui/AppHeader";
 import { AccountPanel } from "../src/ui/AccountPanel";
 import { AuthPanel } from "../src/ui/AuthPanel";
 import { BarragePanel } from "../src/ui/BarragePanel";
+import { RoomStage } from "../src/ui/RoomStage";
 import { ShortcutHints } from "../src/ui/ShortcutHints";
 import { TimerLab } from "../src/ui/TimerLab";
 import { VoicePanel } from "../src/ui/VoicePanel";
 import { AccountSession } from "../src/hooks/useAccountSession";
-import { AccountProfile } from "../src/shared/types";
+import { AccountProfile, PublicRoomState } from "../src/shared/types";
 import { parseRoute } from "../src/lib/router";
 
 interface Case {
@@ -65,6 +66,40 @@ const fakeSession = {
   resetPassword: async () => undefined,
   clearError: noop,
 } as unknown as AccountSession;
+
+/**
+ * 房间主画面用的最小房间状态。
+ * updatedAt 取当前时间：useLiveClock 会按墙钟外推剩余时间，
+ * 如果给 0 会被外推成一亿多毫秒、直接把两个计时都算成 0。
+ */
+const fakeRoom = {
+  roomId: "room-demo",
+  topic: "示范辩题",
+  rulesText: "示范赛制",
+  sides: { affirmativeName: "正方甲", negativeName: "反方乙" },
+  config: {
+    initialTimeSeconds: 600,
+    maxDurationSeconds: 1800,
+    maxRounds: 6,
+    bonusRules: [{ startRound: 1, endRound: null, bonusSeconds: 30 }],
+  },
+  clock: {
+    affirmativeRemainingMs: 522_310,
+    negativeRemainingMs: 377_820,
+    totalRemainingMs: 754_000,
+    activeSide: "affirmative" as const,
+    isRunning: true,
+    currentRound: 3,
+    updatedAt: Date.now(),
+  },
+  roundHistory: [],
+  barrage: [],
+  reactions: [],
+  matchLog: [],
+  voice: { participants: [], requests: [] },
+  createdAt: 0,
+  updatedAt: 0,
+} as unknown as PublicRoomState;
 
 const cases: Case[] = [
   {
@@ -187,6 +222,28 @@ const cases: Case[] = [
         }),
       ),
     expect: ["08:42.31", "06:17.82", "计时中", "等待", "12:34", "Total time"],
+  },
+  {
+    name: "room-stage",
+    /*
+      房间主画面。250ms 的 tick 现在关在这个组件里（useLiveClock），
+      这里验证它仍然按真实时钟状态渲染 —— 断言的是结构而不是具体读数，
+      因为读数会随 Date.now() 墙钟外推而变化。
+    */
+    render: () =>
+      renderToString(
+        createElement(RoomStage, { room: fakeRoom, serverOffset: 0, showRunState: true }),
+      ),
+    expect: ["Round 03 / 06", "正方甲", "反方乙", "当前发言", "Running", "Total time"],
+  },
+  {
+    name: "room-stage-solo",
+    // 辩手视角：只看自己一方，"计时中"要说成"轮到你发言"
+    render: () =>
+      renderToString(
+        createElement(RoomStage, { room: fakeRoom, serverOffset: 0, only: "affirmative" }),
+      ),
+    expect: ["轮到你发言", "对手剩余", "正方甲"],
   },
   {
     name: "barrage-panel",
