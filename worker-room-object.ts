@@ -1,11 +1,14 @@
 import { getRolePermissions } from "./src/shared/defaults";
 import {
   appendBarrage,
+  appendMatchEvent,
+  appendReaction,
   applyCommand,
   buildRoomLinks,
   canExecuteCommand,
   cleanupDisconnectedClient,
   createRoomState,
+  describeCommandEvents,
   getVoiceParticipant,
   isVoiceParticipant,
   syncRoomState,
@@ -16,6 +19,8 @@ import {
 import {
   BarrageRequest,
   CommandRequest,
+  OnlineByRole,
+  ReactionRequest,
   RoomAccessPayload,
   RoomRole,
   RoomState,
@@ -103,6 +108,10 @@ export class RoomDurableObject {
       return this.handleBarrage(request, room);
     }
 
+    if (request.method === "POST" && url.pathname === "/reaction") {
+      return this.handleReaction(request, room);
+    }
+
     if (request.method === "POST" && url.pathname === "/signal") {
       return this.handleVoiceSignal(request, room);
     }
@@ -178,7 +187,7 @@ export class RoomDurableObject {
     const token = payload.token ?? "";
 
     if (!isRole(role) || !validateToken(currentRoom, role, token)) {
-      return json({ error: "鎴块棿鏉冮檺鏃犳晥" }, 403);
+      return json({ error: "房间权限无效" }, 403);
     }
 
     const origin = new URL(request.url).origin;
@@ -207,11 +216,23 @@ export class RoomDurableObject {
     const origin = new URL(request.url).origin;
     const now = Date.now();
     const room = applyCommand(currentRoom, payload.command, now, payload.role);
-    this.room = room;
+
+    /*
+      比赛事件时间线在这里落库：把「这条命令到底造成了什么变化」翻译成事件，
+      再逐条追加。翻译逻辑放在引擎里（纯函数），这里只负责调用 ——
+      计时引擎本身一行没动。
+    */
+    const events = describeCommandEvents(payload.command, currentRoom, room, payload.role);
+    const loggedRoom = events.reduce(
+      (accumulated, event) => appendMatchEvent(accumulated, event, now),
+      room,
+    );
+
+    this.room = loggedRoom;
     await this.persistRoom(origin);
     void this.broadcastSnapshot(origin);
 
-    return json(this.createAccessPayload(room, payload.role, origin, now));
+    return json(this.createAccessPayload(loggedRoom, payload.role, origin, now));
   }
 
   private async handleBarrage(request: Request, currentRoom: RoomState): Promise<Response> {
@@ -223,6 +244,23 @@ export class RoomDurableObject {
     const origin = new URL(request.url).origin;
     const now = Date.now();
     const room = appendBarrage(currentRoom, payload, now);
+    this.room = room;
+    await this.persistRoom(origin);
+    void this.broadcastSnapshot(origin);
+
+    return json(this.createAccessPayload(room, payload.role, origin, now));
+  }
+
+  /** 快速反应：和弹幕同构，靠全量快照自动广播，不需要额外的事件通道 */
+  private async handleReaction(request: Request, currentRoom: RoomState): Promise<Response> {
+    const payload = (await request.json()) as ReactionRequest;
+    if (!isRole(payload.role) || !validateToken(currentRoom, payload.role, payload.token)) {
+      return json({ error: "房间权限无效" }, 403);
+    }
+
+    const origin = new URL(request.url).origin;
+    const now = Date.now();
+    const room = appendReaction(currentRoom, payload, now);
     this.room = room;
     await this.persistRoom(origin);
     void this.broadcastSnapshot(origin);
@@ -358,6 +396,7 @@ export class RoomDurableObject {
       links: role === "host" ? buildRoomLinks(origin, room.roomId, room.tokens) : undefined,
       serverNow: now,
       onlineCount: this.getOnlineCount(),
+      onlineByRole: this.getOnlineCounts(),
     };
   }
 
@@ -415,6 +454,7 @@ export class RoomDurableObject {
       room: toPublicRoomState(room),
       serverNow: now,
       onlineCount: this.getOnlineCount(),
+      onlineByRole: this.getOnlineCounts(),
     });
 
     await writer.write(this.encoder.encode(`data: ${payload}\n\n`));
@@ -430,6 +470,31 @@ export class RoomDurableObject {
 
   private getOnlineCount(): number {
     return new Set([...this.sessions.values()].map((session) => session.presenceId)).size;
+  }
+
+  /**
+   * 按角色拆分的在线人数。
+   *
+   * 复用同一条 SSE 会话表（每条会话本来就带 role），口径与 getOnlineCount 一致：
+   * 同一台设备多开只算一次（按 presenceId 去重）。不是新造一套在线统计。
+   */
+  private getOnlineCounts(): OnlineByRole {
+    const perRole = new Map<RoomRole, Set<string>>();
+
+    for (const session of this.sessions.values()) {
+      const bucket = perRole.get(session.role) ?? new Set<string>();
+      bucket.add(session.presenceId);
+      perRole.set(session.role, bucket);
+    }
+
+    const countOf = (role: RoomRole): number => perRole.get(role)?.size ?? 0;
+
+    return {
+      host: countOf("host"),
+      affirmative: countOf("affirmative"),
+      negative: countOf("negative"),
+      viewer: countOf("viewer"),
+    };
   }
 
   private async closeSession(sessionId: string, origin: string): Promise<void> {

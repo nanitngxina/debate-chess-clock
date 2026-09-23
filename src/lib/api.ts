@@ -11,6 +11,7 @@ import {
   ForgotPasswordInput,
   LoginInput,
   ProfileInput,
+  ReactionRequest,
   RegisterInput,
   ResetPasswordInput,
   RoomAccessPayload,
@@ -282,6 +283,13 @@ export async function sendRoomCommand(roomId: string, payload: CommandRequest): 
 
 export async function sendBarrage(roomId: string, payload: BarrageRequest): Promise<RoomAccessPayload> {
   return requestJson<RoomAccessPayload>(`/api/rooms/${encodeURIComponent(roomId)}/barrage`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function sendReaction(roomId: string, payload: ReactionRequest): Promise<RoomAccessPayload> {
+  return requestJson<RoomAccessPayload>(`/api/rooms/${encodeURIComponent(roomId)}/reaction`, {
     method: "POST",
     body: JSON.stringify(payload),
   });

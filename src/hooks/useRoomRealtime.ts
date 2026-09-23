@@ -40,8 +40,10 @@ function shouldReusePayload(previousPayload: RoomAccessPayload | null, nextPaylo
     return false;
   }
 
+  // 按角色的人数也要比：总数不变但构成变了（主持人走、观众来）时不能复用旧对象
   return (
     previousPayload.onlineCount === nextPayload.onlineCount &&
+    JSON.stringify(previousPayload.onlineByRole) === JSON.stringify(nextPayload.onlineByRole) &&
     JSON.stringify(previousPayload.room) === JSON.stringify(nextPayload.room)
   );
 }
@@ -103,6 +105,7 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
                 room: snapshot.room,
                 serverNow: snapshot.serverNow,
                 onlineCount: snapshot.onlineCount,
+                onlineByRole: snapshot.onlineByRole,
               }
             : {
                 room: snapshot.room,
@@ -111,6 +114,7 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
                 links: undefined,
                 serverNow: snapshot.serverNow,
                 onlineCount: snapshot.onlineCount,
+                onlineByRole: snapshot.onlineByRole,
               };
 
           return shouldReusePayload(previousPayload, nextPayload) ? previousPayload : nextPayload;

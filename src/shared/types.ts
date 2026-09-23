@@ -13,6 +13,12 @@ export interface RoomConfig {
   initialTimeSeconds: number;
   maxDurationSeconds: number;
   bonusRules: BonusTimeRule[];
+  /**
+   * 赛制约定的回合总数，**只用于展示**（`ROUND 03 / 06` 与回合进度条）。
+   * 引擎里的回合推进逻辑不读它 —— 回合仍然只在"反方结束回合"时 +1，
+   * 不设上限，这样加时规则不会被这个字段意外截断。
+   */
+  maxRounds: number;
 }
 
 export interface RoomClockState {
@@ -39,6 +45,59 @@ export interface BarrageMessage {
   content: string;
   role: Exclude<RoomRole, "host"> | "host";
   createdAt: number;
+}
+
+/** 快速反应的类型（emoji 与中文标签放在 defaults.ts，这里只留稳定标识） */
+export type ReactionKey = "good-point" | "brilliant" | "makes-sense" | "unexpected";
+
+export interface ReactionMessage {
+  id: string;
+  nickname: string;
+  role: RoomRole;
+  key: ReactionKey;
+  createdAt: number;
+}
+
+/**
+ * 比赛事件时间线的类型。
+ *
+ * 服务端只记录"发生了什么"（结构化），中文文案由前端渲染 ——
+ * 这样服务端保持语义化，改文案不用动服务端。
+ */
+export type MatchEventType =
+  | "match-started"
+  | "match-resumed"
+  | "match-paused"
+  | "side-switched"
+  | "round-ended"
+  | "time-added"
+  | "time-adjusted"
+  | "match-reset"
+  | "topic-changed"
+  | "rules-changed"
+  | "sides-changed"
+  | "config-changed"
+  | "voice-joined"
+  | "voice-left"
+  | "mic-requested"
+  | "mic-approved"
+  | "mic-rejected";
+
+export interface MatchEvent {
+  id: string;
+  type: MatchEventType;
+  /** 事件发生的服务端时刻 */
+  at: number;
+  /** 事件发生时的回合号 */
+  round: number;
+  /** 涉及的阵营（切边 / 加时 / 回合结束时） */
+  side?: DebateSide;
+  /** 触发者角色（主持人操作 / 辩手自己结束回合 / 观众申请） */
+  actorRole?: RoomRole;
+  /** 涉及的人（语音相关事件） */
+  nickname?: string;
+  /** 数值附加信息（加时秒数等） */
+  amountSeconds?: number;
 }
 
 export interface RoomSideInfo {
@@ -82,6 +141,8 @@ export interface RoomState {
   clock: RoomClockState;
   roundHistory: RoundRecord[];
   barrage: BarrageMessage[];
+  reactions: ReactionMessage[];
+  matchLog: MatchEvent[];
   voice: VoiceState;
   tokens: RoomTokens;
   createdAt: number;
@@ -97,6 +158,8 @@ export interface PublicRoomState {
   clock: RoomClockState;
   roundHistory: RoundRecord[];
   barrage: BarrageMessage[];
+  reactions: ReactionMessage[];
+  matchLog: MatchEvent[];
   voice: VoiceState;
   createdAt: number;
   updatedAt: number;
@@ -109,6 +172,14 @@ export interface RolePermissions {
   controlledSide: DebateSide | null;
 }
 
+/** 按角色拆分的在线人数（同一台设备多开只算一次，按 presenceId 去重） */
+export interface OnlineByRole {
+  host: number;
+  affirmative: number;
+  negative: number;
+  viewer: number;
+}
+
 export interface RoomAccessPayload {
   room: PublicRoomState;
   role: RoomRole;
@@ -116,12 +187,14 @@ export interface RoomAccessPayload {
   links?: RoomLinkBundle;
   serverNow: number;
   onlineCount: number;
+  onlineByRole: OnlineByRole;
 }
 
 export interface RoomSnapshotPayload {
   room: PublicRoomState;
   serverNow: number;
   onlineCount: number;
+  onlineByRole: OnlineByRole;
 }
 
 export interface RoomLinkBundle {
@@ -239,7 +312,8 @@ export type RoomCommand =
   | { type: "leave-voice"; clientId: string }
   | { type: "set-voice-muted"; clientId: string; muted: boolean }
   | { type: "request-public-voice"; clientId: string; nickname: string }
-  | { type: "approve-public-voice"; clientId: string };
+  | { type: "approve-public-voice"; clientId: string }
+  | { type: "reject-public-voice"; clientId: string };
 
 export interface CommandRequest {
   role: RoomRole;
@@ -252,6 +326,13 @@ export interface BarrageRequest {
   token: string;
   nickname: string;
   content: string;
+}
+
+export interface ReactionRequest {
+  role: RoomRole;
+  token: string;
+  nickname: string;
+  key: ReactionKey;
 }
 
 export interface VoiceSessionDescriptionPayload {

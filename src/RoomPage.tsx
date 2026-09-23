@@ -10,6 +10,7 @@ import {
   describeSide,
   formatDateTime,
   formatDurationFromMs,
+  formatRoundLabel,
 } from "./lib/format";
 import { DEFAULT_ROOM_INPUT, MAX_BARRAGE_ITEMS } from "./shared/defaults";
 import { cloneConfig, minutesToSeconds, secondsToMinutes } from "./shared/engine";
@@ -400,6 +401,7 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
 
   const room = payload.room;
   const clock = liveClock ?? room.clock;
+  const roundLabel = formatRoundLabel(clock.currentRound, room.config.maxRounds);
   const mySide = payload.permissions.controlledSide;
   const canEndMyTurn = Boolean(
     payload.permissions.canEndOwnTurn && mySide && clock.activeSide === mySide,
@@ -423,7 +425,7 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
 
         <div className="room-bar__group room-bar__group--center">
           <span className="room-bar__topic">{room.topic}</span>
-          <span className="dim nowrap">第 {clock.currentRound} 回合</span>
+          <span className="dim nowrap">{roundLabel}</span>
         </div>
 
         <div className="room-bar__group room-bar__group--end">
@@ -456,7 +458,7 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
           <TimerLab
             variant="room"
             isLive={clock.isRunning}
-            roundLabel={`第 ${clock.currentRound} 回合`}
+            roundLabel={roundLabel}
             totalLabel={formatDurationFromMs(clock.totalRemainingMs)}
             sides={buildSides(room, clock)}
             banner={timerBanner}
@@ -808,6 +810,26 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
                           }
                         />
                       </label>
+                      <label className="field">
+                        <span className="field__label">回合总数（仅用于显示）</span>
+                        <input
+                          className="input input--num"
+                          type="number"
+                          min="1"
+                          max="99"
+                          step="1"
+                          value={configDraft.maxRounds}
+                          onChange={(event) =>
+                            setConfigDraft((previousConfig) => ({
+                              ...previousConfig,
+                              maxRounds: Math.max(
+                                1,
+                                Math.min(99, Math.round(Number(event.target.value) || 1)),
+                              ),
+                            }))
+                          }
+                        />
+                      </label>
                     </div>
 
                     <RulesEditor
@@ -864,7 +886,7 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
           <TimerLab
             variant="room"
             isLive={clock.isRunning}
-            roundLabel={`第 ${clock.currentRound} 回合`}
+            roundLabel={roundLabel}
             totalLabel={formatDurationFromMs(clock.totalRemainingMs)}
             sides={buildSides(room, clock)}
             banner={timerBanner}
@@ -886,7 +908,7 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
             <TimerLab
               variant="solo"
               isLive={clock.isRunning}
-              roundLabel={`第 ${clock.currentRound} 回合`}
+              roundLabel={roundLabel}
               totalLabel={formatDurationFromMs(clock.totalRemainingMs)}
               sides={soloSides}
               banner={timerBanner}

@@ -1,4 +1,11 @@
-import { DEFAULT_CONFIG, MAX_BARRAGE_ITEMS, MAX_ROUND_HISTORY } from "./defaults";
+import {
+  DEFAULT_CONFIG,
+  MAX_BARRAGE_ITEMS,
+  MAX_MATCH_LOG,
+  MAX_REACTIONS,
+  MAX_ROUND_HISTORY,
+  REACTION_KEYS,
+} from "./defaults";
 import {
   BarrageMessage,
   BarrageRequest,
@@ -6,7 +13,10 @@ import {
   CommandableSide,
   CreateRoomInput,
   DebateSide,
+  MatchEvent,
   PublicRoomState,
+  ReactionMessage,
+  ReactionRequest,
   RoomClockState,
   RoomCommand,
   RoomConfig,
@@ -28,6 +38,7 @@ export function cloneConfig(config: RoomConfig): RoomConfig {
   return {
     initialTimeSeconds: config.initialTimeSeconds,
     maxDurationSeconds: config.maxDurationSeconds,
+    maxRounds: config.maxRounds,
     bonusRules: cloneBonusRules(config.bonusRules),
   };
 }
@@ -51,6 +62,8 @@ export function clonePublicRoomState(room: PublicRoomState): PublicRoomState {
     clock: { ...room.clock },
     roundHistory: room.roundHistory.map((item) => ({ ...item })),
     barrage: room.barrage.map((item) => ({ ...item })),
+    reactions: room.reactions.map((item) => ({ ...item })),
+    matchLog: room.matchLog.map((item) => ({ ...item })),
     voice: cloneVoiceState(room.voice),
   };
 }
@@ -70,6 +83,8 @@ export function createClockState(config: RoomConfig, now: number): RoomClockStat
 export function sanitizeConfig(config: RoomConfig): RoomConfig {
   const initialTimeSeconds = clampInteger(config.initialTimeSeconds, 30, 60 * 60);
   const maxDurationSeconds = clampInteger(config.maxDurationSeconds, initialTimeSeconds, 6 * 60 * 60);
+  // 老房间存下来的 config 没有这个字段，用默认值兜底
+  const maxRounds = clampInteger(config.maxRounds ?? DEFAULT_CONFIG.maxRounds, 1, 99);
   const sortedRules = [...config.bonusRules]
     .map((rule) => ({
       startRound: clampInteger(rule.startRound, 1, 999),
@@ -99,6 +114,7 @@ export function sanitizeConfig(config: RoomConfig): RoomConfig {
   return {
     initialTimeSeconds,
     maxDurationSeconds,
+    maxRounds,
     bonusRules: validatedRules.length > 0 ? validatedRules : cloneConfig(DEFAULT_CONFIG).bonusRules,
   };
 }
@@ -118,6 +134,8 @@ export function createRoomState(roomId: string, input: CreateRoomInput, tokens: 
     clock: createClockState(config, now),
     roundHistory: [],
     barrage: [],
+    reactions: [],
+    matchLog: [],
     voice: createVoiceState(),
     tokens,
     createdAt: now,
@@ -135,6 +153,8 @@ export function toPublicRoomState(room: RoomState): PublicRoomState {
     clock: { ...room.clock },
     roundHistory: room.roundHistory.map((item) => ({ ...item })),
     barrage: room.barrage.map((item) => ({ ...item })),
+    reactions: room.reactions.map((item) => ({ ...item })),
+    matchLog: room.matchLog.map((item) => ({ ...item })),
     voice: cloneVoiceState(room.voice),
     createdAt: room.createdAt,
     updatedAt: room.updatedAt,
@@ -500,6 +520,22 @@ export function applyCommand(room: RoomState, command: RoomCommand, now: number,
         updatedAt: now,
       };
     }
+    case "reject-public-voice": {
+      const participant = getVoiceParticipant(syncedRoom, command.clientId);
+      if (!participant || participant.role !== "viewer") {
+        return syncedRoom;
+      }
+
+      // 只把请求撤掉：人仍然留在观众频道，权限状态一点没变
+      return {
+        ...syncedRoom,
+        voice: {
+          ...syncedRoom.voice,
+          requests: removeVoiceRequest(syncedRoom.voice.requests, command.clientId),
+        },
+        updatedAt: now,
+      };
+    }
   }
 }
 
@@ -524,6 +560,180 @@ export function appendBarrage(room: RoomState, input: BarrageRequest, now: numbe
     barrage: [...room.barrage, message].slice(-MAX_BARRAGE_ITEMS),
     updatedAt: now,
   };
+}
+
+/** 追加一条快速反应。和弹幕同构，同样靠全量快照自动广播，不需要额外通道。 */
+export function appendReaction(room: RoomState, input: ReactionRequest, now: number): RoomState {
+  // 服务端白名单校验：key 不合法就当作没发生，绝不写进房间状态
+  if (!REACTION_KEYS.includes(input.key)) {
+    return room;
+  }
+
+  const nickname = input.nickname.trim().slice(0, 20) || "路人";
+
+  const message: ReactionMessage = {
+    id: `${now}-${Math.random().toString(36).slice(2, 8)}`,
+    nickname,
+    role: input.role,
+    key: input.key,
+    createdAt: now,
+  };
+
+  return {
+    ...room,
+    reactions: [...room.reactions, message].slice(-MAX_REACTIONS),
+    updatedAt: now,
+  };
+}
+
+/**
+ * 追加一条比赛事件。
+ *
+ * 只记录"发生了什么"（结构化），中文文案由前端渲染 —— 服务端保持语义化。
+ * 按时间顺序追加（最新在末尾），超出上限时丢掉最旧的。
+ */
+export function appendMatchEvent(
+  room: RoomState,
+  event: Omit<MatchEvent, "id" | "at" | "round">,
+  now: number,
+): RoomState {
+  const record: MatchEvent = {
+    id: `${now}-${Math.random().toString(36).slice(2, 8)}`,
+    round: room.clock.currentRound,
+    at: now,
+    ...event,
+  };
+
+  return {
+    ...room,
+    matchLog: [...room.matchLog, record].slice(-MAX_MATCH_LOG),
+    updatedAt: now,
+  };
+}
+
+/**
+ * 把一条命令翻译成比赛事件（0 条、1 条或 2 条）。
+ *
+ * 只做翻译，不修改任何状态 —— 由 Durable Object 在命令应用之后调用并写进 matchLog。
+ * 之所以需要 before / after 两份状态，是为了区分"真的发生了变化"和"空操作"
+ * （比如已经暂停时再点暂停，不该往时间线里塞一条噪音）。
+ */
+export function describeCommandEvents(
+  command: RoomCommand,
+  before: RoomState,
+  after: RoomState,
+  actorRole: RoomRole,
+): Omit<MatchEvent, "id" | "at" | "round">[] {
+  const nicknameOf = (room: RoomState, clientId: string): string | undefined =>
+    getVoiceParticipant(room, clientId)?.nickname;
+
+  switch (command.type) {
+    case "resume": {
+      if (before.clock.isRunning) {
+        return [];
+      }
+
+      const firstStart = before.roundHistory.length === 0 && before.clock.currentRound === 1;
+      return [{ type: firstStart ? "match-started" : "match-resumed", actorRole }];
+    }
+
+    case "pause":
+      return before.clock.isRunning ? [{ type: "match-paused", actorRole }] : [];
+
+    case "switch-side":
+      return after.clock.activeSide
+        ? [{ type: "side-switched", side: after.clock.activeSide, actorRole }]
+        : [];
+
+    case "set-active-side":
+      return before.clock.activeSide === command.side
+        ? []
+        : [{ type: "side-switched", side: command.side, actorRole }];
+
+    case "end-turn": {
+      // 只有真的写进了新的回合记录，才算"结束了回合"
+      if (after.roundHistory.length <= before.roundHistory.length) {
+        return [];
+      }
+
+      const record = after.roundHistory[0];
+      const events: Omit<MatchEvent, "id" | "at" | "round">[] = [
+        { type: "round-ended", side: record.side, actorRole },
+      ];
+
+      if (record.bonusSeconds > 0) {
+        events.push({
+          type: "time-added",
+          side: record.side,
+          actorRole,
+          amountSeconds: record.bonusSeconds,
+        });
+      }
+
+      return events;
+    }
+
+    case "adjust-time": {
+      const base = {
+        type: "time-adjusted" as const,
+        actorRole,
+        amountSeconds: command.amountSeconds,
+      };
+      return [command.side === "total" ? base : { ...base, side: command.side }];
+    }
+
+    case "reset":
+      return [{ type: "match-reset", actorRole }];
+
+    case "set-topic":
+      return before.topic === after.topic ? [] : [{ type: "topic-changed", actorRole }];
+
+    case "set-rules":
+      return before.rulesText === after.rulesText ? [] : [{ type: "rules-changed", actorRole }];
+
+    case "set-sides":
+      return before.sides.affirmativeName === after.sides.affirmativeName &&
+        before.sides.negativeName === after.sides.negativeName
+        ? []
+        : [{ type: "sides-changed", actorRole }];
+
+    case "update-config":
+      return [{ type: "config-changed", actorRole }];
+
+    case "join-voice":
+      return [
+        {
+          type: "voice-joined",
+          actorRole,
+          nickname: command.nickname.trim().slice(0, 20) || "路人",
+        },
+      ];
+
+    case "leave-voice":
+      return [{ type: "voice-left", actorRole, nickname: nicknameOf(before, command.clientId) }];
+
+    case "request-public-voice":
+      return [
+        {
+          type: "mic-requested",
+          actorRole,
+          nickname: command.nickname.trim().slice(0, 20) || "路人",
+        },
+      ];
+
+    case "approve-public-voice":
+      return [{ type: "mic-approved", actorRole, nickname: nicknameOf(before, command.clientId) }];
+
+    case "reject-public-voice":
+      return [{ type: "mic-rejected", actorRole, nickname: nicknameOf(before, command.clientId) }];
+
+    case "set-voice-muted":
+      // 开关麦太频繁，不进比赛时间线
+      return [];
+
+    default:
+      return [];
+  }
 }
 
 export function cleanupDisconnectedClient(room: RoomState, clientId: string): RoomState {

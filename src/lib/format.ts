@@ -39,6 +39,22 @@ export function formatDateTime(timestamp: number): string {
   }).format(timestamp);
 }
 
+/**
+ * 回合指示：Round 03 / 06。
+ *
+ * maxRounds 只用于展示；引擎里回合不设上限（只在"反方结束回合"时 +1），
+ * 所以真的打超了也只显示当前回合，避免出现 "Round 09 / 06" 这种自相矛盾的读数。
+ */
+export function formatRoundLabel(currentRound: number, maxRounds: number): string {
+  const current = String(currentRound).padStart(2, "0");
+
+  if (!Number.isFinite(maxRounds) || maxRounds <= 0 || currentRound > maxRounds) {
+    return `Round ${current}`;
+  }
+
+  return `Round ${current} / ${String(maxRounds).padStart(2, "0")}`;
+}
+
 export function describeSide(side: DebateSide): string {
   return side === "affirmative" ? "正方" : "反方";
 }
