@@ -134,8 +134,9 @@
 
 .room__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
-  gap: var(--sp-6);
+  /* 三栏：语音频道 | 实时弹幕（含快速反应） | 比赛事件 */
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.05fr) minmax(240px, 0.9fr);
+  gap: var(--sp-5);
   margin-top: var(--sp-6);
   align-items: start;
 }
@@ -225,63 +226,9 @@
 }
 
 /* ---------------------------------------------------------------------------
-   回合历史
+   （原来的「回合历史」面板已由「比赛事件」时间线取代：
+     回合结束与自动加时都以事件形式出现在那里。）
    --------------------------------------------------------------------------- */
-
-.history {
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--panel-1);
-  overflow: hidden;
-}
-
-.history__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
-  border-bottom: 1px solid var(--border);
-}
-
-.history__list {
-  display: grid;
-  max-height: 320px;
-  overflow-y: auto;
-}
-
-.history-item {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto auto;
-  gap: var(--sp-3);
-  align-items: center;
-  padding: var(--sp-3) var(--sp-4);
-  border-bottom: 1px solid var(--border-soft);
-  font-size: var(--fs-sm);
-}
-
-.history-item:last-child {
-  border-bottom: none;
-}
-
-.history-item__round {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  color: var(--text-dim);
-}
-
-.history-item__side {
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.history-item__bonus {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  color: var(--live);
-}
 
 /* ---------------------------------------------------------------------------
    弹幕（LIVE CHAT）
@@ -360,6 +307,170 @@
   flex: 1 1 auto;
   min-height: 44px;
   min-width: 0;
+}
+
+/* 弹幕列表 + 右侧的快速反应 */
+.chat-panel__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   快速反应
+   ---------------------------------------------------------------------------
+   飘屏只对"真正新到"的反应触发（见 ReactionBar），一进房间不会先飘一片。
+   --------------------------------------------------------------------------- */
+
+.reactions {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-left: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.reactions__layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.reaction-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.reaction-btn:hover:not(:disabled) {
+  background: var(--panel-3);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.reaction-btn:disabled {
+  opacity: 0.42;
+}
+
+.reaction-btn__emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.reaction-btn__count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--panel-inset);
+  font-size: var(--fs-micro);
+  color: var(--text);
+}
+
+.reaction-floater {
+  position: absolute;
+  right: var(--sp-2);
+  bottom: var(--sp-3);
+  font-size: 18px;
+  line-height: 1;
+  animation: reaction-float 1800ms var(--ease) forwards;
+}
+
+@keyframes reaction-float {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+
+  18% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-72px) scale(1.05);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   比赛事件时间线
+   --------------------------------------------------------------------------- */
+
+.match-log {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--panel-1);
+  overflow: hidden;
+  max-height: calc(100vh - 180px);
+}
+
+.match-log__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.match-log__count {
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+
+.match-log__body {
+  position: relative;
+  min-height: 170px;
+  padding: var(--sp-3) var(--sp-4);
+  overflow-y: auto;
+  /* 底部渐隐，暗示"还在继续" */
+  mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent 100%);
+}
+
+.match-log__list {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.match-log__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.match-log__time {
+  flex: 0 0 auto;
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+
+.match-log__text {
+  min-width: 0;
+}
+
+/* 比赛主线上真正重要的事件给足对比度，杂项保持安静 */
+.match-log__item--match-started .match-log__text,
+.match-log__item--round-ended .match-log__text,
+.match-log__item--time-added .match-log__text,
+.match-log__item--side-switched .match-log__text {
+  color: var(--text);
 }
 
 /* ---------------------------------------------------------------------------
@@ -450,6 +561,17 @@
    响应式
    --------------------------------------------------------------------------- */
 
+@media (max-width: 1400px) {
+  /* 三栏挤不下时收成两栏：比赛事件整条挪到下面 */
+  .room__grid {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  }
+
+  .room__side--log {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 1080px) {
   .room__grid {
     grid-template-columns: minmax(0, 1fr);
@@ -476,10 +598,6 @@
     margin-left: auto;
   }
 
-  .room-bar__topic {
-    max-width: 100%;
-  }
-
   .room__stage {
     padding-top: var(--sp-5);
   }
@@ -501,13 +619,5 @@
   .deck__custom .input {
     flex: 1 1 auto;
     width: auto;
-  }
-
-  .history-item {
-    grid-template-columns: 40px minmax(0, 1fr) auto;
-  }
-
-  .history-item__bonus {
-    grid-column: 3;
   }
 }

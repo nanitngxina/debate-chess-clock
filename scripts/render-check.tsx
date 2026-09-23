@@ -18,6 +18,7 @@ import { AppHeader } from "../src/ui/AppHeader";
 import { AccountPanel } from "../src/ui/AccountPanel";
 import { AuthPanel } from "../src/ui/AuthPanel";
 import { BarragePanel } from "../src/ui/BarragePanel";
+import { MatchLog } from "../src/ui/MatchLog";
 import { RoomStage } from "../src/ui/RoomStage";
 import { ShortcutHints } from "../src/ui/ShortcutHints";
 import { TimerLab } from "../src/ui/TimerLab";
@@ -256,10 +257,14 @@ const cases: Case[] = [
           items: [
             { id: "m1", nickname: "观众甲", content: "这一轮很精彩", role: "viewer", createdAt: 0 },
           ],
+          reactions: [
+            { id: "r1", nickname: "观众乙", role: "viewer", key: "brilliant", createdAt: 0 },
+          ],
+          onReact: noop,
           onSend: async () => undefined,
         }),
       ),
-    expect: ["Live chat", "观众甲", "这一轮很精彩", "发送", "测试选手"],
+    expect: ["实时弹幕", "观众甲", "这一轮很精彩", "发送", "测试选手", "精彩"],
   },
   {
     name: "voice-panel",
@@ -335,6 +340,43 @@ const cases: Case[] = [
       "邮箱已验证",
       "测试选手",
     ],
+  },
+  {
+    name: "match-log",
+    // 服务端只记结构化事件，中文文案在这里渲染 —— 这条用例就是在验证那层翻译
+    render: () =>
+      renderToString(
+        createElement(MatchLog, {
+          events: [
+            { id: "e1", type: "match-started", at: 0, round: 1, actorRole: "host" },
+            {
+              id: "e2",
+              type: "round-ended",
+              at: 1000,
+              round: 1,
+              side: "affirmative",
+              actorRole: "host",
+            },
+            {
+              id: "e3",
+              type: "time-added",
+              at: 1000,
+              round: 1,
+              side: "affirmative",
+              amountSeconds: 30,
+            },
+            {
+              id: "e4",
+              type: "mic-rejected",
+              at: 2000,
+              round: 1,
+              nickname: "观众小明",
+              actorRole: "host",
+            },
+          ],
+        }),
+      ),
+    expect: ["比赛事件", "主持人开始比赛", "正方结束回合", "自动加时 +30 秒", "观众小明"],
   },
   {
     name: "room-invalid-link",

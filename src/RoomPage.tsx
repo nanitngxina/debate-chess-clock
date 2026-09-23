@@ -2,19 +2,15 @@ import { useEffect, useState } from "react";
 import { useRoomRealtime } from "./hooks/useRoomRealtime";
 import { useVoiceChat } from "./hooks/useVoiceChat";
 import { KeyboardShortcut, useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
-import { sendBarrage, sendRoomCommand } from "./lib/api";
-import {
-  describeConnection,
-  describeSide,
-  formatDateTime,
-  formatRoundLabel,
-} from "./lib/format";
+import { sendBarrage, sendReaction, sendRoomCommand } from "./lib/api";
+import { describeConnection, formatRoundLabel } from "./lib/format";
 import { DEFAULT_ROOM_INPUT, MAX_BARRAGE_ITEMS } from "./shared/defaults";
 import { cloneConfig, minutesToSeconds, secondsToMinutes } from "./shared/engine";
-import { AccountProfile, BarrageMessage, PublicRoomState, RoomCommand, RoomRole } from "./shared/types";
+import { AccountProfile, BarrageMessage, ReactionKey, RoomCommand, RoomRole } from "./shared/types";
 import { BarragePanel } from "./ui/BarragePanel";
 import { BrandMark } from "./ui/BrandMark";
 import { LinkStack } from "./ui/LinkStack";
+import { MatchLog } from "./ui/MatchLog";
 import { RoomPresence } from "./ui/RoomPresence";
 import { RoomStage } from "./ui/RoomStage";
 import { StatusBadge } from "./ui/StatusBadge";
@@ -37,18 +33,6 @@ function readAccessFromQuery(): { role: RoomRole | null; token: string } {
 /** 房间号很长（room-xxxxxx-yyy），展示时去掉前缀并截断 */
 function shortRoomId(roomId: string): string {
   return roomId.replace(/^room-/, "").toUpperCase();
-}
-
-function formatBonus(seconds: number): string {
-  if (seconds <= 0) {
-    return "—";
-  }
-
-  if (seconds < 60) {
-    return `+${seconds}s`;
-  }
-
-  return `+${Math.round((seconds / 60) * 10) / 10}min`;
 }
 
 interface RoomPageProps {
@@ -173,6 +157,27 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
       setFeedback(barrageError instanceof Error ? barrageError.message : "弹幕发送失败");
     } finally {
       setPendingAction(null);
+    }
+  };
+
+  /*
+    快速反应不做乐观插入：它很轻，等一次往返没问题，
+    而且真实状态（reactions）本来就靠全量快照广播回来，
+    前端再自己造一份就成了第二个状态源。
+  */
+  const handleReaction = async (key: ReactionKey) => {
+    setFeedback(null);
+
+    try {
+      const nextPayload = await sendReaction(roomId, {
+        role,
+        token,
+        nickname: accountDisplayName,
+        key,
+      });
+      setPayload(nextPayload);
+    } catch (reactionError) {
+      setFeedback(reactionError instanceof Error ? reactionError.message : "反应发送失败");
     }
   };
 
@@ -535,10 +540,9 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
               onToggleMute={voiceChat.toggleMute}
             />
 
-            <RoundHistory room={room} />
           </div>
 
-          <aside className="room__side">
+          <div className="room__col room__col--chat">
             <BarragePanel
               account={account}
               role={role}
@@ -546,7 +550,13 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
               disabled={!payload.permissions.canSendBarrage || !account}
               sending={pendingAction === "barrage"}
               onSend={handleBarrage}
+              reactions={room.reactions}
+              onReact={handleReaction}
             />
+          </div>
+
+          <aside className="room__side room__side--log">
+            <MatchLog events={room.matchLog} />
           </aside>
         </div>
 
@@ -864,10 +874,9 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
             onToggleMute={voiceChat.toggleMute}
           />
 
-          <RoundHistory room={room} />
         </div>
 
-        <aside className="room__side">
+        <div className="room__col room__col--chat">
           <BarragePanel
             account={account}
             role={role}
@@ -875,7 +884,13 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
             disabled={!payload.permissions.canSendBarrage || !account}
             sending={pendingAction === "barrage"}
             onSend={handleBarrage}
+            reactions={room.reactions}
+            onReact={handleReaction}
           />
+        </div>
+
+        <aside className="room__side room__side--log">
+          <MatchLog events={room.matchLog} />
         </aside>
       </div>
 
@@ -889,28 +904,3 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
   );
 }
 
-function RoundHistory({ room }: { room: PublicRoomState }) {
-  return (
-    <section className="history">
-      <div className="history__head">
-        <span className="u-label">回合历史</span>
-        <span className="pill pill--plain">{room.roundHistory.length} 条</span>
-      </div>
-
-      <ul className="history__list">
-        {room.roundHistory.map((item) => (
-          <li className="history-item" key={item.id}>
-            <span className="history-item__round">R{String(item.round).padStart(2, "0")}</span>
-            <span className="history-item__side">{describeSide(item.side)}</span>
-            <span className="dim nowrap">{formatDateTime(item.endedAt)}</span>
-            <span className="history-item__bonus">{formatBonus(item.bonusSeconds)}</span>
-          </li>
-        ))}
-
-        {room.roundHistory.length === 0 && (
-          <li className="empty">回合结束后，记录会显示在这里。</li>
-        )}
-      </ul>
-    </section>
-  );
-}

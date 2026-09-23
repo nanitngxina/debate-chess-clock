@@ -39,6 +39,16 @@ export function formatDateTime(timestamp: number): string {
   }).format(timestamp);
 }
 
+/** 只要时分秒：比赛事件时间线用（19:34:02） */
+export function formatClockTime(timestamp: number): string {
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(timestamp);
+}
+
 /**
  * 回合指示：Round 03 / 06。
  *
