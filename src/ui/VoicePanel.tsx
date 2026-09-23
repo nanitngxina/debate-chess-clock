@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { describeRole } from "../lib/format";
 import {
   AccountProfile,
   RoomRole,
@@ -8,6 +7,7 @@ import {
   VoiceRequest,
 } from "../shared/types";
 import { AccountAvatar } from "./AccountAvatar";
+import { StatusBadge } from "./StatusBadge";
 
 interface RemoteAudioStream {
   clientId: string;
@@ -33,7 +33,16 @@ interface VoicePanelProps {
   onToggleMute: () => void | Promise<void>;
   onRequestPublicVoice: () => void | Promise<void>;
   onApprovePublicVoice?: (clientId: string) => void | Promise<void>;
+  onRejectPublicVoice?: (clientId: string) => void | Promise<void>;
 }
+
+/** 成员按身份分组的顺序（服务端只有这四个角色） */
+const ROLE_GROUPS: { role: RoomRole; label: string }[] = [
+  { role: "host", label: "主持人" },
+  { role: "affirmative", label: "正方" },
+  { role: "negative", label: "反方" },
+  { role: "viewer", label: "观众" },
+];
 
 function getVoiceTitle(role: RoomRole, currentChannel: VoiceChannel): string {
   if (role === "viewer" && currentChannel === "public") {
@@ -108,6 +117,7 @@ export function VoicePanel({
   onToggleMute,
   onRequestPublicVoice,
   onApprovePublicVoice,
+  onRejectPublicVoice,
 }: VoicePanelProps) {
   const connectedStreams = remoteStreams.filter((stream) => stream.stream.getAudioTracks().length > 0);
   const title = getVoiceTitle(role, currentChannel);
@@ -190,16 +200,28 @@ export function VoicePanel({
               {publicRequests.map((request) => (
                 <li className="voice-member" key={request.clientId}>
                   <span className="voice-member__name">{request.nickname}</span>
-                  <button
-                    type="button"
-                    className="btn btn--sm"
-                    disabled={joining}
-                    onClick={() => {
-                      void onApprovePublicVoice?.(request.clientId);
-                    }}
-                  >
-                    同意上麦
-                  </button>
+                  <span className="voice-member__actions">
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={joining}
+                      onClick={() => {
+                        void onApprovePublicVoice?.(request.clientId);
+                      }}
+                    >
+                      允许
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--sm btn--ghost"
+                      disabled={joining}
+                      onClick={() => {
+                        void onRejectPublicVoice?.(request.clientId);
+                      }}
+                    >
+                      拒绝
+                    </button>
+                  </span>
                 </li>
               ))}
             </ul>
@@ -211,21 +233,42 @@ export function VoicePanel({
             <span className="u-label">{title}成员</span>
             <span className="pill pill--plain">{participants.length} 人</span>
           </div>
-          <ul className="voice-members">
-            {participants.map((participant) => (
-              <li className="voice-member" key={participant.clientId}>
-                <span className="voice-member__name">
-                  {participant.nickname}
-                  <span className="dim"> · {describeRole(participant.role)}</span>
-                </span>
-                <span className={`pill ${participant.muted ? "pill--plain" : "pill--live"}`}>
-                  {!participant.muted && <span className="dot dot--speaking" />}
-                  {participant.muted ? "已静音" : "开麦中"}
-                </span>
-              </li>
-            ))}
-            {participants.length === 0 && <li className="empty">还没有人加入这个语音频道。</li>}
-          </ul>
+
+          {participants.length === 0 ? (
+            <p className="empty">还没有人加入这个语音频道。</p>
+          ) : (
+            ROLE_GROUPS.map((group) => {
+              const members = participants.filter((item) => item.role === group.role);
+
+              if (members.length === 0) {
+                return null;
+              }
+
+              return (
+                <div className="voice-group" key={group.role}>
+                  <div className="voice-group__head">
+                    <span className={`voice-group__dot voice-group__dot--${group.role}`} />
+                    <span className="voice-group__label">{group.label}</span>
+                    <span className="voice-group__count num">{members.length}</span>
+                  </div>
+
+                  <ul className="voice-members">
+                    {members.map((participant) => (
+                      <li className="voice-member" key={participant.clientId}>
+                        <span className="voice-member__name">{participant.nickname}</span>
+                        <StatusBadge
+                          tone={participant.muted ? "waiting" : "live"}
+                          marker={participant.muted ? "hollow" : "dot"}
+                        >
+                          {participant.muted ? "已静音" : "开麦中"}
+                        </StatusBadge>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })
+          )}
         </div>
 
         <div className="voice-block">

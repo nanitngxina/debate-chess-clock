@@ -537,6 +537,12 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
                   `approve-${requestClientId}`,
                 )
               }
+              onRejectPublicVoice={(requestClientId) =>
+                void runCommand(
+                  { type: "reject-public-voice", clientId: requestClientId },
+                  `reject-${requestClientId}`,
+                )
+              }
               onToggleMute={voiceChat.toggleMute}
             />
 
@@ -869,6 +875,12 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
               void runCommand(
                 { type: "approve-public-voice", clientId: requestClientId },
                 `approve-${requestClientId}`,
+              )
+            }
+            onRejectPublicVoice={(requestClientId) =>
+              void runCommand(
+                { type: "reject-public-voice", clientId: requestClientId },
+                `reject-${requestClientId}`,
               )
             }
             onToggleMute={voiceChat.toggleMute}

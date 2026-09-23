@@ -557,6 +557,64 @@
   white-space: nowrap;
 }
 
+.voice-member__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+}
+
+/* ---------------------------------------------------------------------------
+   语音成员按身份分组（主持人 / 正方 / 反方 / 观众）
+   --------------------------------------------------------------------------- */
+
+.voice-group {
+  display: grid;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+.voice-group__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.voice-group__dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: var(--r-pill);
+  background: var(--border-strong);
+}
+
+.voice-group__dot--host {
+  background: var(--warn);
+}
+
+.voice-group__dot--affirmative {
+  background: var(--affirmative);
+}
+
+.voice-group__dot--negative {
+  background: var(--negative);
+}
+
+.voice-group__dot--viewer {
+  background: var(--audience);
+}
+
+.voice-group__label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.voice-group__count {
+  color: var(--text-dim);
+}
+
 /* ---------------------------------------------------------------------------
    响应式
    --------------------------------------------------------------------------- */
