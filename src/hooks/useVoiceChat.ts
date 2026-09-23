@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pollVoiceSignals, sendRoomCommand, sendVoiceSignal } from "../lib/api";
 import { canVoiceParticipantSpeakNow, getVoiceChannelForRole } from "../shared/engine";
 import {
@@ -47,6 +47,38 @@ function getFallbackNickname(role: RoomRole): string {
       return "观众";
   }
 }
+
+// 公共语音是浏览器之间的 P2P（WebRTC）。不配置 STUN 时，浏览器只会收集本机
+// 网卡地址（host candidate）—— 双方一旦不在同一个局域网内就永远连不通，
+// 表现是"能加入语音、但听不到对方"，而且不会有明显报错。
+// 默认挂上 Cloudflare / Google 的免费公共 STUN，可以先让绝大多数家庭宽带直连；
+// 对称 NAT（部分公司网、手机热点）还需要 TURN 中继，用 VITE_ICE_SERVERS
+// 注入即可（JSON 数组，格式同 RTCIceServer[]），不用改代码。
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
+  {
+    urls: ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"],
+  },
+];
+
+function resolveIceServers(): RTCIceServer[] {
+  const raw = import.meta.env.VITE_ICE_SERVERS;
+  if (!raw) {
+    return DEFAULT_ICE_SERVERS;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed as RTCIceServer[];
+    }
+  } catch {
+    // 环境变量写错就退回默认 STUN，不能让整个语音功能不可用
+  }
+
+  return DEFAULT_ICE_SERVERS;
+}
+
+const ICE_SERVERS = resolveIceServers();
 
 function trimProcessedSignalCache(cache: Set<string>) {
   while (cache.size > 500) {
@@ -228,7 +260,7 @@ export function useVoiceChat({
         return existing;
       }
 
-      const connection = new RTCPeerConnection();
+      const connection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
       const stream = new MediaStream();
       const record: PeerRecord = {
         connection,
