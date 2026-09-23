@@ -83,7 +83,8 @@ function statusPillClass(side: TimerSideView): string {
   return "pill pill--plain";
 }
 
-function statusText(side: TimerSideView): string {
+/** 状态文字：首页 hero 与房间页共用同一套措辞，避免两处说法不一致 */
+export function statusText(side: TimerSideView): string {
   if (side.statusLabel) {
     return side.statusLabel;
   }
@@ -100,7 +101,7 @@ function statusText(side: TimerSideView): string {
     return "时间不足";
   }
 
-  return side.active ? "计时中" : "等待";
+  return side.active ? "计时中" : "等待中";
 }
 
 /**

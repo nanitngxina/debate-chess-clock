@@ -50,6 +50,7 @@ export function AppHeader({
         </nav>
 
         <div className="app-header__right">
+          {/* 未登录时用次按钮：首页 hero 的「创建比赛」才是这一屏的主行动 */}
           {account ? (
             <button
               type="button"
@@ -66,7 +67,7 @@ export function AppHeader({
               {!account.emailVerified && <span className="dot" style={{ color: "var(--warn)" }} />}
             </button>
           ) : (
-            <button type="button" className="btn btn--primary" onClick={onOpenAuth}>
+            <button type="button" className="btn btn--ghost" onClick={onOpenAuth}>
               登录
             </button>
           )}

@@ -89,3 +89,23 @@ export function IconMic({ size = 20, className }: IconProps) {
     </svg>
   );
 }
+
+/** 主持人：主办方 / 主控权（首页设计稿里是一顶皇冠） */
+export function IconCrown({ size = 20, className }: IconProps) {
+  return (
+    <svg {...iconProps(size, className)}>
+      <path d="M5 8.6l3.4 2.9L12 5.3l3.6 6.2L19 8.6V17.2H5z" />
+      <path d="M5 20.4h14" />
+    </svg>
+  );
+}
+
+/** 自动加时：按规则循环往复 */
+export function IconRefresh({ size = 20, className }: IconProps) {
+  return (
+    <svg {...iconProps(size, className)}>
+      <path d="M20.2 12a8.2 8.2 0 11-2.6-6" />
+      <path d="M20.6 3.9V9h-5.1" />
+    </svg>
+  );
+}

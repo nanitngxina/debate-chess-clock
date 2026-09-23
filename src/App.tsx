@@ -96,15 +96,33 @@ export default function App() {
 
       <footer className="app-footer">
         <div className="container app-footer__inner">
-          <span>八角笼 DEBATE ARENA · 在线辩论赛实时计时平台</span>
-          <nav className="app-footer__links">
-            <button type="button" className="link-as-button" onClick={() => navigate("/guide")}>
-              使用指南
-            </button>
-            <button type="button" className="link-as-button" onClick={() => navigate("/about")}>
-              关于
-            </button>
-          </nav>
+          <div className="app-footer__brand">
+            <BrandMark className="app-footer__mark" size={30} />
+            <span className="app-footer__brand-text">
+              <span className="app-footer__name">八角笼</span>
+              <span className="app-footer__sub">Debate Arena</span>
+            </span>
+          </div>
+
+          <span className="app-footer__tagline">One room. One clock. Everyone synced.</span>
+
+          <div className="app-footer__right">
+            {/* 站点只有简体中文一种语言，这里只做标识，不做点了没反应的假切换器 */}
+            <span className="app-footer__lang">简体中文</span>
+
+            <nav className="app-footer__links" aria-label="页脚导航">
+              <button type="button" className="link-as-button" onClick={() => navigate("/about")}>
+                关于我们
+              </button>
+              <button type="button" className="link-as-button" onClick={() => navigate("/guide")}>
+                使用指南
+              </button>
+              {/* 目前没有独立的帮助中心页面，帮助内容就在使用指南里 */}
+              <button type="button" className="link-as-button" onClick={() => navigate("/guide")}>
+                帮助中心
+              </button>
+            </nav>
+          </div>
         </div>
       </footer>
 
