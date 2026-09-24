@@ -33,6 +33,12 @@ interface PeerRecord {
   stream: MediaStream;
   label: string;
   pendingCandidates: VoiceIceCandidatePayload[];
+  /** 正在发送 offer 的过程里（perfect negotiation 判断"冲突"用） */
+  makingOffer: boolean;
+  /** 冲突时礼让的一方：由 clientId 字典序决定，保证两端结论相反且稳定 */
+  polite: boolean;
+  /** 本地音轨是在协商之后才挂上去的，需要再跑一轮协商才能生效 */
+  needsRenegotiation: boolean;
 }
 
 /** 稳定的空数组常量：不要用 `?? []`（每次渲染都是新引用，会让依赖它的 effect 反复触发） */
@@ -217,7 +223,20 @@ export function useVoiceChat({
     );
   }, []);
 
-  const attachLocalTracksToConnection = useCallback(async (connection: RTCPeerConnection) => {
+  /**
+   * 把本地音轨挂到连接上。
+   *
+   * WebRTC 有一条硬规则：`addTransceiver` 和修改 `transceiver.direction`
+   * 都必须在**下一轮 offer/answer** 里才会真正生效。
+   * 只改 direction 不发新 offer，就会出现
+   * 「direction 写着 sendrecv，currentDirection 却还是 sendonly/recvonly」
+   * —— 表现为一方永远听不到另一方（实测复现过）。
+   *
+   * 所以这里只负责标记 `needsRenegotiation`，由调用方在合适时机发起协商；
+   * `addTransceiver` 那条路会自己触发 negotiationneeded，不用标记。
+   */
+  const attachLocalTracksToConnection = useCallback(async (record: PeerRecord) => {
+    const { connection } = record;
     const stream = localStreamRef.current;
     const track = stream?.getAudioTracks()[0] ?? null;
     const transceiver = connection
@@ -236,7 +255,13 @@ export function useVoiceChat({
       if (transceiver.sender.track) {
         await transceiver.sender.replaceTrack(null);
       }
-      transceiver.direction = "recvonly";
+
+      if (transceiver.direction !== "recvonly") {
+        transceiver.direction = "recvonly";
+        if (connection.signalingState === "stable") {
+          record.needsRenegotiation = true;
+        }
+      }
       return;
     }
 
@@ -254,8 +279,44 @@ export function useVoiceChat({
 
     if (transceiver.direction !== "sendrecv") {
       transceiver.direction = "sendrecv";
+      if (connection.signalingState === "stable") {
+        record.needsRenegotiation = true;
+      }
     }
   }, []);
+
+  /**
+   * 发起一轮协商（perfect negotiation 的 offer 侧）。
+   * 用无参 setLocalDescription()，浏览器会自己判断该出 offer 还是 answer。
+   */
+  const negotiatePeer = useCallback(
+    async (remoteClientId: string, record: PeerRecord) => {
+      if (record.makingOffer || record.connection.signalingState !== "stable") {
+        return;
+      }
+
+      try {
+        record.makingOffer = true;
+        record.needsRenegotiation = false;
+        await record.connection.setLocalDescription();
+
+        const description = record.connection.localDescription;
+        if (!description) {
+          return;
+        }
+
+        await sendSignal(remoteClientId, {
+          type: "offer",
+          description: { type: "offer", sdp: description.sdp ?? "" },
+        });
+      } catch {
+        // 协商失败交给 onconnectionstatechange 兜底（failed 时会关掉这条连接重来）
+      } finally {
+        record.makingOffer = false;
+      }
+    },
+    [sendSignal],
+  );
 
   const ensurePeer = useCallback(
     (remoteParticipant: Pick<VoiceParticipant, "clientId" | "nickname">, initiate: boolean) => {
@@ -282,6 +343,20 @@ export function useVoiceChat({
         stream,
         label: remoteParticipant.nickname,
         pendingCandidates: [],
+        makingOffer: false,
+        // 字典序大的一方"礼让"：两端结论必然相反，所以冲突时不会双方都退让
+        polite: clientId.localeCompare(remoteParticipant.clientId) > 0,
+        needsRenegotiation: false,
+      };
+
+      /*
+       * perfect negotiation 的核心：任何让收发器发生变化的行为
+       * （addTransceiver、挂上新音轨）都会触发这里，由它统一发起协商。
+       * 之前是"创建连接后手写一次 createOffer"，协商完成之后发生的改动
+       * 就再也没人负责，于是出现单方永久只收不发。
+       */
+      connection.onnegotiationneeded = () => {
+        void negotiatePeer(remoteParticipant.clientId, record);
       };
 
       peersRef.current.set(remoteParticipant.clientId, record);
@@ -340,20 +415,9 @@ export function useVoiceChat({
       if (initiate) {
         void (async () => {
           try {
-            if (connection.signalingState !== "stable") {
-              return;
-            }
-
-            await attachLocalTracksToConnection(connection);
-            const offer = await connection.createOffer();
-            await connection.setLocalDescription(offer);
-            await sendSignal(remoteParticipant.clientId, {
-              type: "offer",
-              description: {
-                type: "offer",
-                sdp: offer.sdp ?? "",
-              },
-            });
+            // 只负责把本地音轨挂上去；随后的 offer 由 onnegotiationneeded 统一发起，
+            // 避免和它重复发 offer 造成"自己跟自己冲突"。
+            await attachLocalTracksToConnection(record);
           } catch {
             closePeer(remoteParticipant.clientId);
             setError("公共语音连接建立失败，请重新加入语音。");
@@ -363,7 +427,7 @@ export function useVoiceChat({
 
       return record;
     },
-    [attachLocalTracksToConnection, closePeer, sendSignal],
+    [attachLocalTracksToConnection, closePeer, negotiatePeer, setError],
   );
 
   const processSignal = useCallback(
@@ -392,16 +456,41 @@ export function useVoiceChat({
 
       try {
         if (envelope.signal.type === "offer") {
-          if (record.connection.signalingState !== "stable") {
-            closePeer(envelope.fromClientId);
-            record = ensurePeer(remoteParticipant, false);
+          /*
+           * perfect negotiation 的冲突处理（glare）。
+           * 两端可能同时发 offer，约定字典序大的一方"礼让"：回滚自己还没被应答的
+           * 本地 offer，接受对方这一份；不让的一方直接忽略，等自己那轮走完。
+           * 上一版遇到冲突直接 closePeer 重建连接，会把已经协商好的收发器一起丢掉 ——
+           * 实测里"一方收到 0 条音轨"多半就是这么来的。
+           */
+          const offerCollision =
+            record.makingOffer || record.connection.signalingState !== "stable";
+
+          if (offerCollision && !record.polite) {
+            return;
+          }
+
+          if (offerCollision) {
+            try {
+              await record.connection.setLocalDescription({ type: "rollback" });
+            } catch {
+              // 极少数状态无法回滚，退回重建连接这条老路
+              closePeer(envelope.fromClientId);
+              record = ensurePeer(remoteParticipant, false);
+            }
           }
 
           await record.connection.setRemoteDescription(envelope.signal.description);
-          await attachLocalTracksToConnection(record.connection);
+          await attachLocalTracksToConnection(record);
           await flushPendingCandidates(record);
           const answer = await record.connection.createAnswer();
           await record.connection.setLocalDescription(answer);
+
+          // 如果刚才挂音轨时改了方向（direction 变了但没进这一轮 SDP），补一轮协商
+          if (record.needsRenegotiation && record.connection.signalingState === "stable") {
+            void negotiatePeer(envelope.fromClientId, record);
+          }
+
           await sendSignal(envelope.fromClientId, {
             type: "answer",
             description: {
@@ -429,16 +518,25 @@ export function useVoiceChat({
         setError("公共语音连接同步失败，请重新加入语音。");
       }
     },
-    [attachLocalTracksToConnection, clientId, closePeer, ensurePeer, flushPendingCandidates, sendSignal],
+    [attachLocalTracksToConnection, clientId, closePeer, ensurePeer, flushPendingCandidates, negotiatePeer, sendSignal],
   );
 
   const attachLocalTracksToPeers = useCallback(() => {
-    for (const record of peersRef.current.values()) {
-      void attachLocalTracksToConnection(record.connection).catch(() => {
-        setError("公共语音连接同步失败，请重新加入语音。");
-      });
+    for (const [remoteClientId, record] of peersRef.current.entries()) {
+      void attachLocalTracksToConnection(record)
+        .then(() => {
+          // 本地音轨是在协商完成之后才挂上去的：必须补一轮协商，
+          // 否则这一方只会收不会发（单向音频）
+          if (record.needsRenegotiation) {
+            return negotiatePeer(remoteClientId, record);
+          }
+          return undefined;
+        })
+        .catch(() => {
+          setError("公共语音连接同步失败，请重新加入语音。");
+        });
     }
-  }, [attachLocalTracksToConnection]);
+  }, [attachLocalTracksToConnection, negotiatePeer, setError]);
 
   const joinVoice = useCallback(async () => {
     if (!payload || joining) {
