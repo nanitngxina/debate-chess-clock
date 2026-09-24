@@ -205,7 +205,23 @@ export function syncClock(clock: RoomClockState, now: number): RoomClockState {
 
   next.updatedAt = now;
 
-  if (next.totalRemainingMs === 0 || next.affirmativeRemainingMs === 0 || next.negativeRemainingMs === 0) {
+  /*
+   * 只在「正在发言那一方的时间用尽」或「全场总时长用尽」时停表。
+   *
+   * 这里原来写的是 `totalRemainingMs === 0 || affirmativeRemainingMs === 0 ||
+   * negativeRemainingMs === 0` —— 用「或」把双方都检查了。后果是：
+   * 正方时间一旦走完（界面停在 00:00），反方就永远起步不了，
+   * 因为每次同步都会因为"正方式 0"而把 isRunning 置回 false。
+   * 表现是"点开始后反方走几秒就停"（前端先本地乐观计时，1.5 秒后
+   * 被服务端快照纠正）。
+   *
+   * 顺带修掉一处自相矛盾：isMatchFinished 用的是"双方都为 0 才算结束"，
+   * 和这里的"任一方为 0 就停"本来就不一致。
+   */
+  const activeRemainingMs =
+    clock.activeSide === "affirmative" ? next.affirmativeRemainingMs : next.negativeRemainingMs;
+
+  if (next.totalRemainingMs === 0 || activeRemainingMs === 0) {
     next.isRunning = false;
   }
 
