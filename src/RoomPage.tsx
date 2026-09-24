@@ -40,9 +40,11 @@ function shortRoomId(roomId: string): string {
 interface RoomPageProps {
   roomId: string;
   account: AccountProfile | null;
+  /** 退出房间：回到主菜单。由 App 传入（RoomPage 自己不掌握路由） */
+  onExit: () => void;
 }
 
-export function RoomPage({ roomId, account }: RoomPageProps) {
+export function RoomPage({ roomId, account, onExit }: RoomPageProps) {
   const { role, token } = readAccessFromQuery();
 
   if (!role || !token) {
@@ -61,7 +63,7 @@ export function RoomPage({ roomId, account }: RoomPageProps) {
     );
   }
 
-  return <RoomPageInner roomId={roomId} role={role} token={token} account={account} />;
+  return <RoomPageInner roomId={roomId} role={role} token={token} account={account} onExit={onExit} />;
 }
 
 interface RoomPageInnerProps {
@@ -69,9 +71,10 @@ interface RoomPageInnerProps {
   role: RoomRole;
   token: string;
   account: AccountProfile | null;
+  onExit: () => void;
 }
 
-function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
+function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerProps) {
   const { payload, connection, error, refresh, serverOffset, clientId, lastVoiceSignal, setPayload } =
     useRoomRealtime(roomId, role, token);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -208,6 +211,24 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
     } catch {
       setFeedback(`复制失败，请手动复制：${link}`);
     }
+  };
+
+  /*
+   * 退出房间：先退出语音再回主菜单。
+   * 顺序很重要 —— 直接切走的话服务端不会收到 leave-voice，
+   * 别人那边的语音成员列表里会一直挂着一个已经走掉的人。
+   * 所以即使离开语音失败，也要保证用户能走掉（不阻塞 onExit）。
+   */
+  const handleExitRoom = async () => {
+    try {
+      if (voiceChat.isJoined) {
+        await voiceChat.leaveVoice();
+      }
+    } catch {
+      /* 离开语音失败不应该把用户困在房间里 */
+    }
+
+    onExit();
   };
 
   /* -------------------------------------------------------------- 快捷键 */
@@ -403,6 +424,14 @@ function RoomPageInner({ roomId, role, token, account }: RoomPageInnerProps) {
           <span className="pill pill--plain nowrap">{roundLabel}</span>
           {connection === "live" && <StatusBadge tone="live">所有设备已同步</StatusBadge>}
           <span className="pill pill--plain nowrap">{payload.onlineCount} 人在线</span>
+          <button
+            type="button"
+            className="btn btn--sm btn--quiet"
+            onClick={() => void handleExitRoom()}
+            title="退出语音并回到主菜单"
+          >
+            退出房间
+          </button>
         </div>
       </div>
     </header>

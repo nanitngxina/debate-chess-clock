@@ -89,7 +89,9 @@ export default function App() {
             {route.name === "dashboard" && (
               <DashboardPage onOpenRoom={(url) => window.location.assign(url)} />
             )}
-            {route.name === "room" && <RoomPage roomId={route.roomId} account={session.account} />}
+            {route.name === "room" && (
+              <RoomPage roomId={route.roomId} account={session.account} onExit={() => navigate("/")} />
+            )}
           </>
         )}
       </main>

@@ -655,8 +655,30 @@ export function useVoiceChat({
     };
   }, [clientId, isJoined, processSignal, role, roomId, token]);
 
+  /** 卸载时要判断"当时是否还在语音里"，用 ref 记录（cleanup 闭包里的 state 会过时） */
+  const joinedRef = useRef(false);
+  useEffect(() => {
+    joinedRef.current = isJoined;
+  }, [isJoined]);
+
   useEffect(() => {
     return () => {
+      /*
+       * 直接切页面 / 关标签时，也要通知服务端离开语音。
+       * 之前这里只做本地清理，服务端的 voice.participants 会一直留着这个人 ——
+       * 别人看到的是一个"人已经走了、却还挂在成员列表里"的幽灵。
+       */
+      if (joinedRef.current) {
+        joinedRef.current = false;
+        void sendRoomCommand(roomId, {
+          role,
+          token,
+          command: { type: "leave-voice", clientId },
+        }).catch(() => {
+          /* 页面已在卸载，通知失败无从补救 */
+        });
+      }
+
       closeAllPeers();
       const stream = localStreamRef.current;
       if (stream) {
@@ -664,7 +686,7 @@ export function useVoiceChat({
         localStreamRef.current = null;
       }
     };
-  }, [closeAllPeers]);
+  }, [clientId, closeAllPeers, role, roomId, token]);
   return {
     channel,
     participants,
