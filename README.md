@@ -167,6 +167,17 @@ powershell -File scripts/smoke-test-auth.ps1
 
 本地开发参考 `.dev.vars.example`；`.dev.vars` 已被 `.gitignore` 忽略，不会提交。
 
+> **注意：本地和线上是两套独立的存储，不会自动同步。**
+>
+> | 环境 | 口令/密钥存在哪 | 怎么改 |
+> | --- | --- | --- |
+> | 本地 | `.dev.vars` 明文文件 | 直接编辑，**改完必须重启 `wrangler dev`**（不会热重载） |
+> | 线上 | Worker secret（加密） | `npx wrangler secret put <名字>`，**写入后无法读回**，只能覆盖 |
+>
+> 也就是说：在 `.dev.vars` 里改了 `HOST_ADMIN_PASSWORD`，线上**不会**跟着变，反之亦然。
+> 两边用不同的值就会出现"本地能登、线上登不上"（或反过来），而且报错都是同一句"后台口令错误"，很难查。
+> **建议两处保持同一个值**，改动时一起改。
+
 ## License
 
 MIT

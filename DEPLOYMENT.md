@@ -92,6 +92,9 @@ npx wrangler r2 bucket create debate-cage-clock-avatars
 npx wrangler d1 migrations apply DB --remote
 
 # 4) 配置密钥（口令你定，密钥用强随机串）
+#    HOST_ADMIN_PASSWORD 请和本地 .dev.vars 里填同一个值：
+#    线上 secret 和 .dev.vars 是两套独立存储，不会互相同步，
+#    不一致时会表现为"本地能登、线上登不上"，而报错文案完全一样。
 npx wrangler secret put HOST_ADMIN_PASSWORD
 npx wrangler secret put ADMIN_SESSION_SECRET
 

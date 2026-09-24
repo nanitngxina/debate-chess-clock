@@ -163,7 +163,7 @@ ENABLE_DEV_OUTBOX=true
 - [ ] `npx wrangler d1 create debate-cage-clock-accounts` 并把真实 `database_id` 填进 `wrangler.toml`
 - [ ] `npx wrangler d1 migrations apply DB --remote` 建表
 - [ ] `npx wrangler secret put ADMIN_SESSION_SECRET`（换成足够长的随机串）
-- [ ] `npx wrangler secret put HOST_ADMIN_PASSWORD`
+- [ ] `npx wrangler secret put HOST_ADMIN_PASSWORD`（**和本地 `.dev.vars` 用同一个值**，否则会出现"本地能登、线上登不上"）
 - [ ] 配好发信服务并 `wrangler secret put RESEND_API_KEY`
 - [ ] **确认 `ENABLE_DEV_OUTBOX` 没有带到线上**
 - [ ] 用 `scripts/smoke-test-auth.ps1` 的思路在线上手动验证一遍注册/找回
