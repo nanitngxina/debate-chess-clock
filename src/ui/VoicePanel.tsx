@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SPEAKING_THRESHOLD } from "../hooks/useVoiceLevels";
 import { useVoiceLevel } from "../lib/voiceLevels";
 import {
@@ -117,8 +117,24 @@ function describeVoiceNotice(
   return "现在轮到你方发言，可以在公共语音中打开麦克风。";
 }
 
-function RemoteAudio({ stream }: { stream: MediaStream }) {
+/**
+ * 远端音频播放。
+ *
+ * 这里必须能"自愈"，因为音频播放设备是共享资源：
+ * 其他应用（QQ / 微信 / 会议软件）抢走设备时，Chrome 会让 play() 失败，
+ * 或者直接把元素暂停；**对方释放设备后浏览器不会自动恢复播放**。
+ *
+ * 上一版把 play() 的失败静默吞掉、且从不重试，结果就是
+ * "挂了 QQ 电话之后再也听不见"，而且界面上没有任何提示，只能靠猜。
+ *
+ * 现在的策略分三层：
+ *   1. play() 失败按退避重试若干次 —— 覆盖设备被短暂占用
+ *   2. 监听 pause / stalled / ended / devicechange 自动续播 —— 覆盖设备被抢走又还回来
+ *   3. 仍然失败就明确告诉用户点一下 —— 用户手势是唯一 100% 可靠的解锁方式
+ */
+function RemoteAudio({ stream, label }: { stream: MediaStream; label: string }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [needsGesture, setNeedsGesture] = useState(false);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -126,13 +142,99 @@ function RemoteAudio({ stream }: { stream: MediaStream }) {
       return;
     }
 
+    let cancelled = false;
+    let attempts = 0;
+    let timer: number | null = null;
+    let lastResumeAt = 0;
+
     audio.srcObject = stream;
-    void audio.play().catch(() => {
-      // 部分浏览器需要用户手势后才允许播放
-    });
+
+    const attemptPlay = () => {
+      if (cancelled) {
+        return;
+      }
+
+      attempts += 1;
+
+      void audio.play().then(
+        () => {
+          if (!cancelled) {
+            attempts = 0;
+            setNeedsGesture(false);
+          }
+        },
+        () => {
+          if (cancelled) {
+            return;
+          }
+
+          if (attempts < 6) {
+            // 400ms 起步的线性退避，整轮大约 6 秒
+            timer = window.setTimeout(attemptPlay, 400 * attempts);
+          } else {
+            setNeedsGesture(true);
+          }
+        },
+      );
+    };
+
+    /** 被外部因素暂停时自动续播。每次续播最多重试一轮，且 2 秒内不重复触发，避免死循环。 */
+    const resumeIfPaused = () => {
+      const now = Date.now();
+
+      if (cancelled || !audio.paused || !audio.srcObject) {
+        return;
+      }
+
+      if (now - lastResumeAt < 2000) {
+        return;
+      }
+
+      lastResumeAt = now;
+      attempts = 0;
+      attemptPlay();
+    };
+
+    attemptPlay();
+    audio.addEventListener("pause", resumeIfPaused);
+    audio.addEventListener("stalled", resumeIfPaused);
+    audio.addEventListener("ended", resumeIfPaused);
+    navigator.mediaDevices?.addEventListener?.("devicechange", resumeIfPaused);
+
+    return () => {
+      cancelled = true;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      audio.removeEventListener("pause", resumeIfPaused);
+      audio.removeEventListener("stalled", resumeIfPaused);
+      audio.removeEventListener("ended", resumeIfPaused);
+      navigator.mediaDevices?.removeEventListener?.("devicechange", resumeIfPaused);
+    };
   }, [stream]);
 
-  return <audio autoPlay playsInline ref={audioRef} />;
+  const resumeByGesture = () => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    void audio.play().then(
+      () => setNeedsGesture(false),
+      () => setNeedsGesture(true),
+    );
+  };
+
+  return (
+    <>
+      <audio autoPlay playsInline ref={audioRef} />
+      {needsGesture && (
+        <button type="button" className="btn btn--sm" onClick={resumeByGesture}>
+          {label} 的声音被其他程序占用了，点这里恢复
+        </button>
+      )}
+    </>
+  );
 }
 
 /** 语音状态：成员列表用状态点表达"开麦中 / 已静音"。 */
@@ -320,7 +422,7 @@ export function VoicePanel({
       </div>
 
       {remoteStreams.map((stream) => (
-        <RemoteAudio key={stream.clientId} stream={stream.stream} />
+        <RemoteAudio key={stream.clientId} stream={stream.stream} label={stream.label} />
       ))}
     </section>
   );
