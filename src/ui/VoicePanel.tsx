@@ -81,12 +81,13 @@ function VoiceMember({ participant }: { participant: VoiceParticipant }) {
   );
 }
 
-function getVoiceTitle(role: RoomRole, currentChannel: VoiceChannel): string {
-  if (role === "viewer" && currentChannel === "public") {
-    return "公共语音";
-  }
-
-  return role === "viewer" ? "观众语音频道" : "公共语音";
+function getVoiceTitle(_role: RoomRole, _currentChannel: VoiceChannel): string {
+  /*
+   * 统一叫「公共语音」——观众页原来显示的是「观众语音频道」。
+   * 注意：这里只改文案，频道的实际逻辑一律没动（观众进哪个频道、
+   * 要不要审批，都还是原来的行为）。
+   */
+  return "公共语音";
 }
 
 function getJoinLabel(title: string, isJoined: boolean): string {
@@ -99,7 +100,7 @@ function describeVoiceNotice(
   canSpeakNow: boolean,
 ): string {
   if (role === "viewer" && currentChannel === "audience") {
-    return "观众默认进入观众语音频道。也可以申请加入公共频道，等待主持人批准。";
+    return "加入后即可发言。想和主持人、辩手同频交流，点「申请加入公共频道」等待主持人批准。";
   }
 
   if (role === "viewer" && currentChannel === "public") {
