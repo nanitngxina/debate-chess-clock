@@ -229,7 +229,23 @@ export function syncClock(clock: RoomClockState, now: number): RoomClockState {
 }
 
 export function syncRoomState(room: RoomState, now: number): RoomState {
-  const nextClock = syncClock(room.clock, now);
+  const syncedClock = syncClock(room.clock, now);
+
+  /*
+   * 统一"什么时候算结束"。
+   *
+   * syncClock 只能看到时钟自己（当前发言方时间、总时长），看不到回合数；
+   * 而界面判断是否结束用的是 isMatchFinished —— 它会额外检查回合数。
+   * 两者不一致时就会出现"界面显示已结束、时间却还在往下走"的矛盾状态，
+   * 而且是持续并存的（回合数打满后不会自己恢复）。
+   *
+   * 所以在这里补齐：只要 isMatchFinished 成立，就把 isRunning 归零。
+   */
+  const nextClock =
+    syncedClock.isRunning && isMatchFinished(syncedClock, room.config)
+      ? { ...syncedClock, isRunning: false }
+      : syncedClock;
+
   const nextVoice = syncVoiceStateWithClock(room.voice, nextClock);
   if (sameClock(room.clock, nextClock) && JSON.stringify(room.voice) === JSON.stringify(nextVoice)) {
     return room;
