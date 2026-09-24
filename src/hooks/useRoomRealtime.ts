@@ -66,11 +66,12 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
   }, []);
 
   const syncSnapshot = useCallback(async () => {
-    const nextPayload = await fetchRoomAccess(roomId, role, token);
+    // 带上 presenceId：服务端用它来判断"这台设备还在线"（在线人数以最后活跃时间为准）
+    const nextPayload = await fetchRoomAccess(roomId, role, token, presenceId);
     applyPayload(nextPayload);
     setConnection("live");
     setError(null);
-  }, [applyPayload, role, roomId, token]);
+  }, [applyPayload, role, roomId, token, presenceId]);
 
   const refresh = useCallback(async () => {
     setConnection("connecting");

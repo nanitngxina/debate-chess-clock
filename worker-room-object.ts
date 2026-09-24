@@ -33,6 +33,8 @@ import { RoomBootstrapPayload, WorkerEnv } from "./worker-types";
 const STORAGE_KEY = "room-state";
 const IDLE_DELETE_AT_KEY = "idle-delete-at";
 const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+/** 超过这么久没再露过面就算离线（客户端每 1.5 秒轮询一次，所以 7 秒足够宽容） */
+const PRESENCE_TTL_MS = 7000;
 
 interface LiveSession {
   writer: WritableStreamDefaultWriter<Uint8Array>;
@@ -47,6 +49,11 @@ export class RoomDurableObject {
   private readonly env: WorkerEnv;
   private readonly encoder = new TextEncoder();
   private readonly sessions = new Map<string, LiveSession>();
+  /**
+   * 最近活跃过的客户端（presenceId → { 时间, 角色 }）。
+   * 在线人数以它为准，而不是以 SSE 会话数为准 —— 见 getOnlineCounts 的说明。
+   */
+  private readonly presence = new Map<string, { at: number; role: RoomRole }>();
   private readonly queuedSignals = new Map<string, VoiceSignalEnvelope[]>();
   private room: RoomState | null = null;
 
@@ -177,12 +184,17 @@ export class RoomDurableObject {
     }
 
     const now = Date.now();
+    this.notePresence(url.searchParams.get("presenceId")?.trim() || null, role, now);
     const room = await this.syncAndPersistIfNeeded(currentRoom, url.origin, now);
     return json(this.createAccessPayload(room, role, url.origin, now));
   }
 
   private async handleAccessPost(request: Request, currentRoom: RoomState): Promise<Response> {
-    const payload = (await request.json()) as { role?: string; token?: string };
+    const payload = (await request.json()) as {
+      role?: string;
+      token?: string;
+      presenceId?: string;
+    };
     const role = payload.role ?? null;
     const token = payload.token ?? "";
 
@@ -192,6 +204,7 @@ export class RoomDurableObject {
 
     const origin = new URL(request.url).origin;
     const now = Date.now();
+    this.notePresence(payload.presenceId?.trim() || null, role, now);
     const room = await this.syncAndPersistIfNeeded(currentRoom, origin, now);
     return json(this.createAccessPayload(room, role, origin, now));
   }
@@ -284,8 +297,11 @@ export class RoomDurableObject {
     const writer = stream.writable.getWriter();
     const sessionId = crypto.randomUUID();
     const heartbeatId = setInterval(() => {
-      void writer.write(this.encoder.encode(": ping\n\n"));
-    }, 15000);
+      // 心跳写失败说明连接已经死了，立刻回收这条会话
+      writer.write(this.encoder.encode(": ping\n\n")).catch(() => {
+        void this.closeSession(sessionId, url.origin);
+      });
+    }, 10000);
 
     this.sessions.set(sessionId, {
       writer,
@@ -294,13 +310,33 @@ export class RoomDurableObject {
       clientId,
       role,
     });
+    this.notePresence(presenceId || clientId, role, Date.now());
     await this.cancelIdleDeletion();
+
+    /*
+      客户端断开（哪怕是浏览器进程被杀）时，可读端被取消，可写端随之以错误结束 ——
+      用 writer.closed 来回收会话。
+
+      之前只依赖 request.signal 的 abort：实测客户端被杀之后这条会话永远不消失，
+      房间里的"在线人数"一直虚高（复测里 30 秒都不下降），死 writer 也会越积越多。
+    */
+    void writer.closed.catch(() => this.closeSession(sessionId, url.origin));
 
     request.signal?.addEventListener("abort", () => {
       void this.closeSession(sessionId, url.origin);
     });
 
-    await this.writeSnapshot(writer, syncedRoom, Date.now());
+    /*
+      注意：这里**不能 await**。
+      TransformStream 可读端的 highWaterMark 是 0，write() 要等可读端被消费才会 resolve；
+      而可读端要等这个函数 return 之后才交给 Response —— await 就是死锁：
+      handler 永远不返回、SSE 一个字节都发不出来（此前线上/本地的实时推送其实全靠
+      1.5 秒轮询兜底，就是这个原因）。
+      先 return Response，写入自然会随着消费被冲刷出去。
+    */
+    void this.writeSnapshot(writer, syncedRoom, Date.now()).catch((error) => {
+      console.error("[sse] 首帧推送失败", error);
+    });
     void this.broadcastSnapshot(url.origin);
 
     return new Response(stream.readable, {
@@ -469,22 +505,30 @@ export class RoomDurableObject {
   }
 
   private getOnlineCount(): number {
-    return new Set([...this.sessions.values()].map((session) => session.presenceId)).size;
+    const counts = this.getOnlineCounts();
+    return counts.host + counts.affirmative + counts.negative + counts.viewer;
   }
 
   /**
    * 按角色拆分的在线人数。
    *
-   * 复用同一条 SSE 会话表（每条会话本来就带 role），口径与 getOnlineCount 一致：
-   * 同一台设备多开只算一次（按 presenceId 去重）。不是新造一套在线统计。
+   * 口径不是"有多少条 SSE 连接"，而是"最近 TTL 内还活跃过的客户端"。
+   * 原因：客户端被直接杀掉时，workerd 不会让 SSE 的写操作报错（数据静默缓冲），
+   * 于是僵尸会话永远留在 sessions 里 —— 实测人数 30 秒都不下降。
+   * 而每个客户端本来就在每 1.5 秒轮询一次 /access，用"最后活跃时间"判断既准确又及时。
    */
   private getOnlineCounts(): OnlineByRole {
+    const now = Date.now();
     const perRole = new Map<RoomRole, Set<string>>();
 
-    for (const session of this.sessions.values()) {
-      const bucket = perRole.get(session.role) ?? new Set<string>();
-      bucket.add(session.presenceId);
-      perRole.set(session.role, bucket);
+    for (const [presenceId, entry] of this.presence) {
+      if (now - entry.at > PRESENCE_TTL_MS) {
+        continue;
+      }
+
+      const bucket = perRole.get(entry.role) ?? new Set<string>();
+      bucket.add(presenceId);
+      perRole.set(entry.role, bucket);
     }
 
     const countOf = (role: RoomRole): number => perRole.get(role)?.size ?? 0;
@@ -495,6 +539,21 @@ export class RoomDurableObject {
       negative: countOf("negative"),
       viewer: countOf("viewer"),
     };
+  }
+
+  /** 记录一次"这个客户端还活着"，顺手清掉过期的 */
+  private notePresence(presenceId: string | null, role: RoomRole, now: number): void {
+    if (!presenceId) {
+      return;
+    }
+
+    this.presence.set(presenceId, { at: now, role });
+
+    for (const [id, entry] of this.presence) {
+      if (now - entry.at > PRESENCE_TTL_MS * 4) {
+        this.presence.delete(id);
+      }
+    }
   }
 
   private async closeSession(sessionId: string, origin: string): Promise<void> {

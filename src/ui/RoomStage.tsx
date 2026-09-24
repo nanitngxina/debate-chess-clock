@@ -81,7 +81,8 @@ export const RoomStage = memo(function RoomStage({
   const negativeLevel = useSideVoiceLevel("negative");
 
   const [roundBanner, setRoundBanner] = useState<string | null>(null);
-  const previousRoundRef = useRef<number | null>(null);
+  const previousRecordRef = useRef<string | null>(null);
+  const hasObservedRecordRef = useRef(false);
   const previousRemainingRef = useRef<{ affirmative: number; negative: number } | null>(null);
   const hasObservedRef = useRef(false);
 
@@ -114,25 +115,39 @@ export const RoomStage = memo(function RoomStage({
     previousRemainingRef.current = nextRemaining;
   }, [affirmativeMs, negativeMs]);
 
-  // 回合变化时给一次短暂横幅（ROUND 03 · +30s）
-  const currentRound = room.clock.currentRound;
-  const latestBonus = room.roundHistory[0]?.bonusSeconds ?? 0;
+  /*
+    回合结束横幅。
+    原来盯的是"回合号变化"，但只有反方结束回合时回合号才 +1 —— 正方结束自己的回合
+    什么提示都没有，用户只能自己从数字跳变里猜。
+    改成盯"回合历史多了一条新记录"：任何一方结束回合都立刻给一次显性反馈。
+  */
+  const latestRecord = room.roundHistory[0];
+  const latestRecordId = latestRecord?.id ?? null;
 
   useEffect(() => {
-    if (previousRoundRef.current === null) {
-      previousRoundRef.current = currentRound;
+    /*
+      第一帧只记录基准（可能是 null，也可能是进房间时已有的历史），之后任何一条
+      新记录都要弹横幅 —— 所以基准和"是否已经观察过"必须分开记，
+      否则"本场比赛的第一条回合记录"会被当成历史吞掉。
+    */
+    if (!hasObservedRecordRef.current) {
+      hasObservedRecordRef.current = true;
+      previousRecordRef.current = latestRecordId;
       return;
     }
 
-    if (currentRound === previousRoundRef.current) {
+    if (!latestRecordId || previousRecordRef.current === latestRecordId) {
       return;
     }
 
-    previousRoundRef.current = currentRound;
-    setRoundBanner(
-      `Round ${String(currentRound).padStart(2, "0")}${latestBonus > 0 ? ` · +${latestBonus}s` : ""}`,
-    );
-  }, [currentRound, latestBonus]);
+    previousRecordRef.current = latestRecordId;
+
+    const side = latestRecord?.side === "negative" ? "反方" : "正方";
+    const bonus =
+      latestRecord && latestRecord.bonusSeconds > 0 ? ` · +${latestRecord.bonusSeconds}s` : "";
+
+    setRoundBanner(`${side}回合结束${bonus}`);
+  }, [latestRecordId, latestRecord]);
 
   // 横幅只停留一小会儿
   useEffect(() => {

@@ -263,12 +263,18 @@ export function buildEventsUrl(
   return buildUrl(`/api/rooms/${encodeURIComponent(roomId)}/events?${query.toString()}`);
 }
 
-export async function fetchRoomAccess(roomId: string, role: string, token: string): Promise<RoomAccessPayload> {
+export async function fetchRoomAccess(
+  roomId: string,
+  role: string,
+  token: string,
+  presenceId?: string,
+): Promise<RoomAccessPayload> {
   return requestJson<RoomAccessPayload>(`/api/rooms/${encodeURIComponent(roomId)}/access`, {
     method: "POST",
     body: JSON.stringify({
       role,
       token,
+      presenceId,
       t: Date.now(),
     }),
   });
