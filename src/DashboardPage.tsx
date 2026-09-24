@@ -432,6 +432,14 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
                         </button>
                         <button
                           type="button"
+                          className="btn btn--ghost btn--sm"
+                          title="把这场比赛的四类链接显示到右侧「分享链接」面板"
+                          onClick={() => setLatestRoom(room)}
+                        >
+                          获取链接
+                        </button>
+                        <button
+                          type="button"
                           className="btn btn--quiet btn--sm"
                           disabled={deletingRoomId === room.roomId}
                           onClick={() => void handleDeleteRoom(room)}
