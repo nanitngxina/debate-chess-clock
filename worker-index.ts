@@ -57,6 +57,11 @@ const ADMIN_SESSION_SUBJECT = "debate-host-admin";
 const RATE_LIMITS = {
   registerPerIp: { limit: 10, windowMs: 60 * 60 * 1000 },
   loginPerIdentity: { limit: 10, windowMs: 15 * 60 * 1000 },
+  /**
+   * 后台口令登录。这个入口权限最高（能建房、删房），但口令往往是主持人自己定的短串，
+   * 所以必须限流 —— 否则 5 位小写口令在无限流的接口上几小时就能爆破完。
+   */
+  adminPerIp: { limit: 10, windowMs: 15 * 60 * 1000 },
   forgotPerIp: { limit: 10, windowMs: 60 * 60 * 1000 },
   forgotPerEmail: { limit: 5, windowMs: 60 * 60 * 1000 },
   resendPerAccount: { limit: 5, windowMs: 60 * 60 * 1000 },
@@ -183,6 +188,20 @@ export default worker;
 async function handleAdminLogin(request: Request, env: WorkerEnv): Promise<Response> {
   const payload = await readJsonBody<{ password?: string }>(request);
   if (!payload.password || payload.password !== env.HOST_ADMIN_PASSWORD) {
+    // 只在口令错误时计数：这样子正常登录永远不会消耗额度，主持人反复进控制台
+    // 不会把自己锁在外面；而攻击者每个窗口仍然只拿得到 limit 次猜测机会。
+    // 注意计数放在比较之后 —— 即使已经被限流，正确的口令依然能进来。
+    const verdict = await consumeRateLimit(
+      env.DB,
+      `admin:${getClientKey(request)}`,
+      RATE_LIMITS.adminPerIp.limit,
+      RATE_LIMITS.adminPerIp.windowMs,
+    );
+
+    if (!verdict.allowed) {
+      return tooManyRequests(verdict.retryAfterMs);
+    }
+
     return json({ error: "后台口令错误" }, 401);
   }
 
