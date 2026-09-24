@@ -3,6 +3,19 @@ main = "worker-index.ts"
 compatibility_date = "2026-03-18"
 compatibility_flags = ["enable_request_signal"]
 
+# 保留 workers.dev 入口（一旦配置了 routes，wrangler 默认会把它关掉，必须显式打开）
+workers_dev = true
+
+# ---------------------------------------------------------------------------
+# 自定义域名 —— 绑到 bajialong.com（2026-09-23 注册、Cloudflare 托管 DNS）
+# custom_domain = true 时 Cloudflare 会自动建 DNS 记录并签发证书，不用手配。
+# workers.dev 的地址仍然可用，两个入口并存。
+# ---------------------------------------------------------------------------
+routes = [
+  { pattern = "bajialong.com", custom_domain = true },
+  { pattern = "www.bajialong.com", custom_domain = true }
+]
+
 # 前端静态资源（先 npm run build 生成 dist/，再 deploy）
 [assets]
 directory = "./dist"
