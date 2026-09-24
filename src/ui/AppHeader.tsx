@@ -24,29 +24,65 @@ export function AppHeader({
   onOpenAuth,
   onOpenAccount,
 }: AppHeaderProps) {
+  /*
+   * 在房间里时，顶栏的导航一律改成"新标签页打开"。
+   *
+   * 原因：导航走的是 pushState + setRoute，会直接把 RoomPage 卸载掉 ——
+   * 声音断开、语音退出、房间链接（带着 role 和 token）也从地址栏消失，
+   * 想回来只能重新翻出那条链接。而房间是一个"正在进行中的现场"，
+   * 不该被一个顺手点一下的导航干掉。
+   *
+   * 要离开房间就用房间顶栏里那个「退出房间」按钮：那是明确的动作。
+   */
+  const inRoom = route.name === "room";
+  const hint = inRoom ? "在新标签页打开，不会退出房间" : undefined;
+
   return (
     <header className="app-header">
       <div className="container app-header__inner">
-        <button type="button" className="brand" onClick={() => onNavigate("/")}>
-          <BrandMark className="brand__mark" size={30} />
-          <span className="brand__text">
-            <span className="brand__name">八角笼</span>
-            <span className="brand__sub">Debate Arena</span>
-          </span>
-        </button>
+        {inRoom ? (
+          <a className="brand" href="/" target="_blank" rel="noreferrer" title={hint}>
+            <BrandMark className="brand__mark" size={30} />
+            <span className="brand__text">
+              <span className="brand__name">八角笼</span>
+              <span className="brand__sub">Debate Arena</span>
+            </span>
+          </a>
+        ) : (
+          <button type="button" className="brand" onClick={() => onNavigate("/")}>
+            <BrandMark className="brand__mark" size={30} />
+            <span className="brand__text">
+              <span className="brand__name">八角笼</span>
+              <span className="brand__sub">Debate Arena</span>
+            </span>
+          </button>
+        )}
 
         <nav className="app-nav" aria-label="主导航">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={`app-nav__link ${route.name === item.key ? "app-nav__link--active" : ""}`}
-              aria-current={route.name === item.key ? "page" : undefined}
-              onClick={() => onNavigate(item.path)}
-            >
-              {item.label}
-            </button>
-          ))}
+          {NAV_ITEMS.map((item) =>
+            inRoom ? (
+              <a
+                key={item.key}
+                className="app-nav__link"
+                href={item.path}
+                target="_blank"
+                rel="noreferrer"
+                title={hint}
+              >
+                {item.label}
+              </a>
+            ) : (
+              <button
+                key={item.key}
+                type="button"
+                className={`app-nav__link ${route.name === item.key ? "app-nav__link--active" : ""}`}
+                aria-current={route.name === item.key ? "page" : undefined}
+                onClick={() => onNavigate(item.path)}
+              >
+                {item.label}
+              </button>
+            ),
+          )}
         </nav>
 
         <div className="app-header__right">
