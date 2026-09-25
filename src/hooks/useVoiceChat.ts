@@ -693,6 +693,7 @@ export function useVoiceChat({
     }
 
     const timer = window.setInterval(() => {
+      void (async () => {
       const negotiation = [...peersRef.current.entries()].map(([remoteClientId, record]) => ({
         对端: remoteClientId.slice(0, 8),
         连接: record.connection.connectionState,
@@ -721,9 +722,35 @@ export function useVoiceChat({
         };
       });
 
-      if (negotiation.length > 0 || playback.length > 0) {
-        console.log("[语音诊断]", JSON.stringify({ 协商: negotiation, 播放: playback }));
-      }
+      /*
+       * RTP 收发包计数 —— 这是"媒体到底有没有在传"的唯一硬证据。
+       * 音轨存在、readyState=live、muted=false 都可能在没有数据包的情况下成立，
+       * 只有这两个计数在涨才说明声音真的在流动。
+       *   收包一直是 0  → 对方的媒体到不了本机（NAT / 代理 / 防火墙拦住）
+       *   发包一直是 0  → 本机的媒体发不出去
+       */
+      const rtp = await Promise.all(
+        [...peersRef.current.entries()].map(async ([remoteClientId, record]) => {
+          const reports = await record.connection.getStats();
+          let inbound: unknown = null;
+          let outbound: unknown = null;
+
+          reports.forEach((report) => {
+            const item = report as unknown as Record<string, unknown>;
+            if (item.type === "inbound-rtp" && item.kind === "audio") {
+              inbound = { 收包: item.packetsReceived ?? 0, 收字节: item.bytesReceived ?? 0 };
+            }
+            if (item.type === "outbound-rtp" && item.kind === "audio") {
+              outbound = { 发包: item.packetsSent ?? 0, 发字节: item.bytesSent ?? 0 };
+            }
+          });
+
+          return { 对端: remoteClientId.slice(0, 8), 收: inbound, 发: outbound };
+        }),
+      );
+
+      console.log("[语音诊断]", JSON.stringify({ 协商: negotiation, 播放: playback, RTP: rtp }));
+    })();
     }, 3000);
 
     return () => window.clearInterval(timer);
