@@ -413,12 +413,46 @@ export function useVoiceChat({
 
       try {
         if (envelope.signal.type === "offer") {
+          /*
+           * 临时诊断（查清单向音频后删除）：钉死 glare 时序。
+           * 特别要看清「冲突前信令状态」和「是否重建了连接」——
+           * 线上数据里出现过"setRemoteDescription 之前就已经有 2 个收发器"，
+           * 而按逻辑重建后只该有 1 个，说明还有一条未知路径在造收发器。
+           */
+          console.log(
+            "[语音诊断:收到offer]",
+            JSON.stringify({
+              冲突前信令: record.connection.signalingState,
+              冲突前收发器: record.connection.getTransceivers().length,
+              本机也发过offer: record.connection.signalingState === "have-local-offer",
+            }),
+          );
+
           if (record.connection.signalingState !== "stable") {
+            console.log("[语音诊断:收到offer]", "检测到冲突 → closePeer + 重建连接");
             closePeer(envelope.fromClientId);
             record = ensurePeer(remoteParticipant, false);
           }
 
+          console.log(
+            "[语音诊断:收到offer]",
+            JSON.stringify({ 重建后收发器: record.connection.getTransceivers().length }),
+          );
+
           await record.connection.setRemoteDescription(envelope.signal.description);
+
+          console.log(
+            "[语音诊断:收到offer]",
+            JSON.stringify({
+              setRemoteDescription后收发器: record.connection.getTransceivers().length,
+              明细: record.connection.getTransceivers().map((t) => ({
+                想要: t.direction,
+                实际: t.currentDirection,
+                有发送轨: Boolean(t.sender.track),
+              })),
+            }),
+          );
+
           await attachLocalTracksToConnection(record.connection);
           await flushPendingCandidates(record);
           const answer = await record.connection.createAnswer();
@@ -698,6 +732,16 @@ export function useVoiceChat({
         对端: remoteClientId.slice(0, 8),
         连接: record.connection.connectionState,
         本地音轨: localStreamRef.current?.getAudioTracks().length ?? 0,
+        /*
+         * 本地麦克风轨的状态 —— 这是之前的盲区。
+         * enabled=false 时 RTP 照样在发，但内容是静音，
+         * 于是"所有指标全绿、对方却听不见"。
+         */
+        本地轨启用: localStreamRef.current?.getAudioTracks()[0]?.enabled ?? null,
+        本地轨静音: localStreamRef.current?.getAudioTracks()[0]?.muted ?? null,
+        /** 服务端认为我是否处于静音状态（决定本地轨是否被禁用） */
+        服务端认为我静音: selfParticipant?.muted ?? null,
+        界面上的静音开关: isMuted,
         收到的音轨: record.stream.getAudioTracks().length,
         收发器: record.connection.getTransceivers().map((t) => ({
           想要: t.direction,
