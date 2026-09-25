@@ -220,6 +220,7 @@ export function useVoiceChat({
   const attachLocalTracksToConnection = useCallback(async (connection: RTCPeerConnection) => {
     const stream = localStreamRef.current;
     const track = stream?.getAudioTracks()[0] ?? null;
+    const before = connection.getTransceivers().length;
     const transceiver = connection
       .getTransceivers()
       .find(
@@ -227,34 +228,54 @@ export function useVoiceChat({
           candidate.receiver.track?.kind === "audio" || candidate.sender.track?.kind === "audio",
       );
 
+    let branch: string;
+
     if (!track || !stream) {
       if (!transceiver) {
         connection.addTransceiver("audio", { direction: "recvonly" });
-        return;
+        branch = "无流+无收发器 → 新建 recvonly";
+      } else {
+        if (transceiver.sender.track) {
+          await transceiver.sender.replaceTrack(null);
+        }
+        transceiver.direction = "recvonly";
+        branch = "无流+有收发器 → 改 recvonly";
       }
-
-      if (transceiver.sender.track) {
-        await transceiver.sender.replaceTrack(null);
-      }
-      transceiver.direction = "recvonly";
-      return;
-    }
-
-    if (!transceiver) {
+    } else if (!transceiver) {
       connection.addTransceiver(track, {
         direction: "sendrecv",
         streams: [stream],
       });
-      return;
+      branch = "有流+无收发器 → 新建 sendrecv";
+    } else {
+      if (transceiver.sender.track?.id !== track.id) {
+        await transceiver.sender.replaceTrack(track);
+      }
+      if (transceiver.direction !== "sendrecv") {
+        transceiver.direction = "sendrecv";
+      }
+      branch = "有流+有收发器 → 复用";
     }
 
-    if (transceiver.sender.track?.id !== track.id) {
-      await transceiver.sender.replaceTrack(track);
-    }
-
-    if (transceiver.direction !== "sendrecv") {
-      transceiver.direction = "sendrecv";
-    }
+    /*
+     * 临时诊断（查清单向音频后删除）。
+     * 关键看「调用前收发器数」：正常应当始终是 1。
+     * 如果某次调用前是 1、调用后变成 2，那条分支就是"凭空多出收发器"的元凶。
+     */
+    console.log(
+      "[语音诊断:挂音轨]",
+      JSON.stringify({
+        信令: connection.signalingState,
+        有本地流: Boolean(stream),
+        调用前: before,
+        调用后: connection.getTransceivers().length,
+        分支: branch,
+        收发器: connection.getTransceivers().map((t) => ({
+          想要: t.direction,
+          实际: t.currentDirection,
+        })),
+      }),
+    );
   }, []);
 
   const ensurePeer = useCallback(
@@ -654,6 +675,59 @@ export function useVoiceChat({
       window.clearInterval(intervalId);
     };
   }, [clientId, isJoined, processSignal, role, roomId, token]);
+
+  /*
+   * 临时诊断（查清单向音频后删除）：每 3 秒同时打两层状态。
+   *
+   * 协商层 —— 看不连的方向有没有被协商出来：
+   *   想要 sendrecv / 实际 null 或 recvonly  → 收发器没生效，这一方发不出去
+   *
+   * 播放层 —— 区分"没收到音轨"和"收到音轨但没声音"（这两个的修法完全不同）：
+   *   轨数 0                      → 根本没收到
+   *   轨状态 live + 轨静音 true    → 音轨被静音了
+   *   暂停 true / 元素静音 true     → 播放被浏览器挡了（我改过的那段自愈逻辑）
+   */
+  useEffect(() => {
+    if (!isJoined) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      const negotiation = [...peersRef.current.entries()].map(([remoteClientId, record]) => ({
+        对端: remoteClientId.slice(0, 8),
+        连接: record.connection.connectionState,
+        本地音轨: localStreamRef.current?.getAudioTracks().length ?? 0,
+        收到的音轨: record.stream.getAudioTracks().length,
+        收发器: record.connection.getTransceivers().map((t) => ({
+          想要: t.direction,
+          实际: t.currentDirection,
+        })),
+      }));
+
+      const playback = Array.from(document.querySelectorAll("audio")).map((audio, index) => {
+        // srcObject 的类型是 MediaProvider（MediaStream | MediaSource | Blob），先收窄
+        const mediaStream = audio.srcObject instanceof MediaStream ? audio.srcObject : null;
+        const track = mediaStream?.getAudioTracks()[0] ?? null;
+        return {
+          序号: index,
+          暂停: audio.paused,
+          元素静音: audio.muted,
+          音量: audio.volume,
+          有流: Boolean(mediaStream),
+          轨数: mediaStream?.getAudioTracks().length ?? 0,
+          轨状态: track?.readyState ?? null,
+          轨静音: track?.muted ?? null,
+          轨启用: track?.enabled ?? null,
+        };
+      });
+
+      if (negotiation.length > 0 || playback.length > 0) {
+        console.log("[语音诊断]", JSON.stringify({ 协商: negotiation, 播放: playback }));
+      }
+    }, 3000);
+
+    return () => window.clearInterval(timer);
+  }, [isJoined]);
 
   /** 卸载时要判断"当时是否还在语音里"，用 ref 记录（cleanup 闭包里的 state 会过时） */
   const joinedRef = useRef(false);
