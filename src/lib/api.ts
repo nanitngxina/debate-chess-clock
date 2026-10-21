@@ -19,6 +19,8 @@ import {
   VoiceSignalPollResponse,
   VoiceSignalRequest,
 } from "../shared/types";
+import { getVoiceIdentity } from "./voiceIdentity";
+import { requiresVoiceIdentity } from "../shared/voiceIdentity";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 const REQUEST_TIMEOUT_MS = 10000;
@@ -258,8 +260,9 @@ export function buildEventsUrl(
   token: string,
   presenceId: string,
   clientId: string,
+  clientKey: string,
 ): string {
-  const query = new URLSearchParams({ role, token, presenceId, clientId });
+  const query = new URLSearchParams({ role, token, presenceId, clientId, clientKey });
   return buildUrl(`/api/rooms/${encodeURIComponent(roomId)}/events?${query.toString()}`);
 }
 
@@ -281,6 +284,9 @@ export async function fetchRoomAccess(
 }
 
 export async function sendRoomCommand(roomId: string, payload: CommandRequest): Promise<RoomAccessPayload> {
+  if (requiresVoiceIdentity(payload.command.type)) {
+    payload = { ...payload, clientKey: (await getVoiceIdentity(roomId, payload.role)).clientKey };
+  }
   return requestJson<RoomAccessPayload>(`/api/rooms/${encodeURIComponent(roomId)}/command`, {
     method: "POST",
     body: JSON.stringify(payload),
@@ -302,6 +308,7 @@ export async function sendReaction(roomId: string, payload: ReactionRequest): Pr
 }
 
 export async function sendVoiceSignal(roomId: string, payload: VoiceSignalRequest): Promise<void> {
+  payload = { ...payload, clientKey: (await getVoiceIdentity(roomId, payload.role)).clientKey };
   await requestJson<{ ok: true }>(`/api/rooms/${encodeURIComponent(roomId)}/signal`, {
     method: "POST",
     body: JSON.stringify(payload),
@@ -314,6 +321,7 @@ export async function pollVoiceSignals(
   token: string,
   clientId: string,
 ): Promise<VoiceSignalPollResponse> {
-  const query = new URLSearchParams({ role, token, clientId });
+  const { clientKey } = await getVoiceIdentity(roomId, role);
+  const query = new URLSearchParams({ role, token, clientId, clientKey });
   return requestJson<VoiceSignalPollResponse>(`/api/rooms/${encodeURIComponent(roomId)}/signals?${query.toString()}`);
 }

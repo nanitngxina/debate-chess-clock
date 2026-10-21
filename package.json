@@ -10,7 +10,9 @@
     "typecheck:worker": "tsc -p tsconfig.worker.json",
     "check": "tsc && tsc -p tsconfig.worker.json",
     "check:render": "esbuild scripts/render-check.tsx --bundle --platform=node --format=cjs --outfile=.render-check.cjs --jsx=automatic --loader:.css=empty --define:import.meta.env={} && node .render-check.cjs",
-    "check:all": "npm run check && npm run check:render",
+    "check:room-access": "node --test scripts/room-access.test.mjs",
+    "check:clock": "node --test scripts/clock.test.mjs",
+    "check:all": "npm run check && npm run check:render && npm run check:room-access && npm run check:clock",
     "deploy": "npx wrangler deploy",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"

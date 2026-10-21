@@ -4,6 +4,7 @@ import { useVoiceChat } from "./hooks/useVoiceChat";
 import { useVoiceLevels } from "./hooks/useVoiceLevels";
 import { KeyboardShortcut, useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { sendBarrage, sendReaction, sendRoomCommand } from "./lib/api";
+import { copyViewerLink } from "./lib/roomSharing";
 import { describeConnection, formatRoundLabel } from "./lib/format";
 import { DEFAULT_ROOM_INPUT, MAX_BARRAGE_ITEMS } from "./shared/defaults";
 import { cloneConfig, isMatchFinished, minutesToSeconds, secondsToMinutes } from "./shared/engine";
@@ -201,16 +202,9 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
     }
   };
 
-  /* 分享：优先发观众链接（房间里其他人拿到的就是同一条实时链接） */
+  /* 分享仅使用服务端给出的观众链接，绝不复制当前角色的授权地址。 */
   const handleShareMatch = async () => {
-    const link = payload?.links?.viewer ?? window.location.href;
-
-    try {
-      await navigator.clipboard.writeText(link);
-      setFeedback("观众链接已复制，发给别人即可观看这场比赛。");
-    } catch {
-      setFeedback(`复制失败，请手动复制：${link}`);
-    }
+    setFeedback(await copyViewerLink(payload?.viewerLink, (link) => navigator.clipboard.writeText(link)));
   };
 
   /*
@@ -856,6 +850,10 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
                     >
                       在暂停状态下同步配置
                     </button>
+                    <p className="dim">
+                      保存配置不会改变当前剩余时间。每方初始时长和全场总时长在重置后生效，
+                      加时规则用于后续回合；调整本场余额请使用加减时间。
+                    </p>
                   </section>
 
                   {payload.links && (
@@ -1023,4 +1021,3 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
     </div>
   );
 }
-

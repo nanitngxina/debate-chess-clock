@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { buildEventsUrl, fetchRoomAccess } from "../lib/api";
 import { getRolePermissions } from "../shared/defaults";
+import { getVoiceIdentity, type VoiceIdentity } from "../lib/voiceIdentity";
 import { RoomAccessPayload, RoomRole, RoomSnapshotPayload, VoiceSignalEnvelope } from "../shared/types";
 
 function getOrCreatePresenceId(): string {
@@ -19,22 +20,6 @@ function getOrCreatePresenceId(): string {
   }
 }
 
-function getOrCreateClientId(): string {
-  try {
-    const storageKey = "debate-room-voice-client-id";
-    const existing = window.sessionStorage.getItem(storageKey);
-    if (existing) {
-      return existing;
-    }
-
-    const nextId = crypto.randomUUID();
-    window.sessionStorage.setItem(storageKey, nextId);
-    return nextId;
-  } catch {
-    return crypto.randomUUID();
-  }
-}
-
 function shouldReusePayload(previousPayload: RoomAccessPayload | null, nextPayload: RoomAccessPayload): boolean {
   if (!previousPayload) {
     return false;
@@ -42,6 +27,8 @@ function shouldReusePayload(previousPayload: RoomAccessPayload | null, nextPaylo
 
   // 按角色的人数也要比：总数不变但构成变了（主持人走、观众来）时不能复用旧对象
   return (
+    previousPayload.viewerLink === nextPayload.viewerLink &&
+    JSON.stringify(previousPayload.links) === JSON.stringify(nextPayload.links) &&
     previousPayload.onlineCount === nextPayload.onlineCount &&
     JSON.stringify(previousPayload.onlineByRole) === JSON.stringify(nextPayload.onlineByRole) &&
     JSON.stringify(previousPayload.room) === JSON.stringify(nextPayload.room)
@@ -54,7 +41,29 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
   const [error, setError] = useState<string | null>(null);
   const [serverOffset, setServerOffset] = useState(0);
   const [presenceId] = useState(() => getOrCreatePresenceId());
-  const [clientId] = useState(() => getOrCreateClientId());
+  /*
+   * 语音身份不再是随便生成的 UUID。
+   *
+   * clientId 必须由私有 clientKey 派生（见 shared/voiceIdentity）：
+   *   clientId = SHA-256(["voice-client-v1", roomId, role, clientKey])
+   * 服务端会用同样方式重算并校验，所以这里必须用派生值 ——
+   * 用随机 UUID 会被判为"身份无效"，加入语音直接 403。
+   */
+  const [identity, setIdentity] = useState<VoiceIdentity | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getVoiceIdentity(roomId, role).then((next) => {
+      if (!cancelled) {
+        setIdentity(next);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId, role]);
+
+  const clientId = identity?.clientId ?? "";
   const [lastVoiceSignal, setLastVoiceSignal] = useState<VoiceSignalEnvelope | null>(null);
 
   const applyPayload = useCallback((nextPayload: RoomAccessPayload) => {
@@ -90,7 +99,14 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
   }, [refresh]);
 
   useEffect(() => {
-    const source = new EventSource(buildEventsUrl(roomId, role, token, presenceId, clientId));
+    // 身份还没算好之前不要连：事件流也要带 clientKey 供服务端校验归属
+    if (!identity) {
+      return;
+    }
+
+    const source = new EventSource(
+      buildEventsUrl(roomId, role, token, presenceId, identity.clientId, identity.clientKey),
+    );
 
     source.onopen = () => {
       setConnection("live");
@@ -144,7 +160,7 @@ export function useRoomRealtime(roomId: string, role: RoomRole, token: string) {
     return () => {
       source.close();
     };
-  }, [clientId, presenceId, role, roomId, token]);
+  }, [identity, presenceId, role, roomId, token]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {

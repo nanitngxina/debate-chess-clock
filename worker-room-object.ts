@@ -1,4 +1,6 @@
 import { getRolePermissions } from "./src/shared/defaults";
+import { requireAdmin } from "./worker-admin-auth";
+import { requiresVoiceIdentity, verifyVoiceIdentity } from "./src/shared/voiceIdentity";
 import {
   appendBarrage,
   appendMatchEvent,
@@ -81,6 +83,13 @@ export class RoomDurableObject {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/admin/create" || url.pathname === "/admin/delete") {
+      const adminError = await requireAdmin(request, this.env);
+      if (adminError) {
+        return adminError;
+      }
+    }
 
     if (request.method === "POST" && url.pathname === "/admin/create") {
       return this.handleBootstrap(request);
@@ -215,6 +224,12 @@ export class RoomDurableObject {
       return json({ error: "房间权限无效" }, 403);
     }
 
+    if (requiresVoiceIdentity(payload.command.type) &&
+        !(await verifyVoiceIdentity(currentRoom.roomId, payload.role,
+          "clientId" in payload.command ? payload.command.clientId : undefined, payload.clientKey))) {
+      return json({ error: "语音连接身份无效，请刷新页面重试" }, 403);
+    }
+
     if (!canExecuteCommand(payload.role, currentRoom, payload.command)) {
       return json({ error: "你没有执行该操作的权限" }, 403);
     }
@@ -286,10 +301,14 @@ export class RoomDurableObject {
     const role = url.searchParams.get("role");
     const token = url.searchParams.get("token") ?? "";
     const presenceId = url.searchParams.get("presenceId")?.trim();
-    const clientId = url.searchParams.get("clientId")?.trim() || crypto.randomUUID();
+    const clientId = url.searchParams.get("clientId") ?? "";
 
     if (!isRole(role) || !validateToken(currentRoom, role, token)) {
       return json({ error: "房间权限无效" }, 403);
+    }
+
+    if (!(await verifyVoiceIdentity(currentRoom.roomId, role, clientId, url.searchParams.get("clientKey")))) {
+      return json({ error: "语音连接身份无效，请刷新页面重试" }, 403);
     }
 
     const syncedRoom = await this.syncAndPersistIfNeeded(currentRoom, url.origin, Date.now());
@@ -355,6 +374,10 @@ export class RoomDurableObject {
       return json({ error: "房间权限无效" }, 403);
     }
 
+    if (!(await verifyVoiceIdentity(currentRoom.roomId, payload.role, payload.clientId, payload.clientKey))) {
+      return json({ error: "语音连接身份无效，请刷新页面重试" }, 403);
+    }
+
     if (!payload.clientId || !payload.targetClientId) {
       return json({ error: "语音会话信息不完整" }, 400);
     }
@@ -369,15 +392,15 @@ export class RoomDurableObject {
 
     const sourceParticipant = getVoiceParticipant(currentRoom, payload.clientId);
     const targetParticipant = getVoiceParticipant(currentRoom, payload.targetClientId);
-    if (!sourceParticipant || !targetParticipant || sourceParticipant.channel !== targetParticipant.channel) {
+    if (!sourceParticipant || sourceParticipant.role !== payload.role || !targetParticipant || sourceParticipant.channel !== targetParticipant.channel) {
       return json({ error: "语音成员不在同一频道" }, 409);
     }
 
     const envelope: VoiceSignalEnvelope = {
       id: `${Date.now()}-${crypto.randomUUID()}`,
       fromClientId: payload.clientId,
-      fromRole: payload.role,
-      fromNickname: payload.nickname.trim().slice(0, 32) || "成员",
+      fromRole: sourceParticipant.role,
+      fromNickname: sourceParticipant.nickname,
       signal: payload.signal,
     };
 
@@ -401,6 +424,10 @@ export class RoomDurableObject {
 
     if (!clientId) {
       return json({ error: "缺少语音客户端标识" }, 400);
+    }
+
+    if (!(await verifyVoiceIdentity(currentRoom.roomId, role, clientId, url.searchParams.get("clientKey")))) {
+      return json({ error: "语音连接身份无效，请刷新页面重试" }, 403);
     }
 
     const response: VoiceSignalPollResponse = {
@@ -430,6 +457,7 @@ export class RoomDurableObject {
       role,
       permissions: getRolePermissions(role),
       links: role === "host" ? buildRoomLinks(origin, room.roomId, room.tokens) : undefined,
+      viewerLink: buildRoomLinks(origin, room.roomId, room.tokens).viewer,
       serverNow: now,
       onlineCount: this.getOnlineCount(),
       onlineByRole: this.getOnlineCounts(),

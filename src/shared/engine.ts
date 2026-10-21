@@ -190,20 +190,25 @@ export function syncClock(clock: RoomClockState, now: number): RoomClockState {
   }
 
   const elapsed = Math.max(0, now - clock.updatedAt);
-  if (elapsed === 0) {
-    return { ...clock };
-  }
+  // 同步可能晚于归零时刻；只扣到发言方或全场时间最先耗尽的位置。
+  // 前端刷新、服务端轮询和断线重连都必须得到相同的计时结果。
+  const chargeableMs = Math.max(0, Math.min(
+    elapsed,
+    getRemainingForSide(clock, clock.activeSide),
+    clock.totalRemainingMs,
+  ));
 
   const next = { ...clock };
-  next.totalRemainingMs = Math.max(0, clock.totalRemainingMs - elapsed);
+  next.totalRemainingMs = Math.max(0, clock.totalRemainingMs - chargeableMs);
 
   if (clock.activeSide === "affirmative") {
-    next.affirmativeRemainingMs = Math.max(0, clock.affirmativeRemainingMs - elapsed);
+    next.affirmativeRemainingMs = Math.max(0, clock.affirmativeRemainingMs - chargeableMs);
   } else {
-    next.negativeRemainingMs = Math.max(0, clock.negativeRemainingMs - elapsed);
+    next.negativeRemainingMs = Math.max(0, clock.negativeRemainingMs - chargeableMs);
   }
 
-  next.updatedAt = now;
+  // 自动停表时保留真实归零时刻，而不是收到同步请求的时刻。
+  next.updatedAt = clock.updatedAt + chargeableMs;
 
   /*
    * 只在「正在发言那一方的时间用尽」或「全场总时长用尽」时停表。
@@ -443,11 +448,11 @@ export function applyCommand(room: RoomState, command: RoomCommand, now: number,
       };
     case "update-config": {
       const config = sanitizeConfig(command.config);
-      const clock = syncedRoom.clock.isRunning ? syncedRoom.clock : preserveClockWithinConfig(syncedRoom.clock, config, now);
+      // 配置定义重置时的时长及后续回合的加时，不是当前余额上限。
+      // 保存时保留已获得的奖励和裁判手动调整；改余额使用 adjust-time 或 reset。
       const nextRoom: RoomState = {
         ...syncedRoom,
         config,
-        clock,
         updatedAt: now,
       };
       return {
@@ -968,16 +973,6 @@ function isVoiceCommandAllowed(
   }
 
   return command.muted || canVoiceParticipantSpeakNow(role, participant.channel, room.clock);
-}
-
-function preserveClockWithinConfig(clock: RoomClockState, config: RoomConfig, now: number): RoomClockState {
-  return {
-    ...clock,
-    affirmativeRemainingMs: Math.min(Math.max(clock.affirmativeRemainingMs, 0), config.initialTimeSeconds * 1000),
-    negativeRemainingMs: Math.min(Math.max(clock.negativeRemainingMs, 0), config.initialTimeSeconds * 1000),
-    totalRemainingMs: Math.min(Math.max(clock.totalRemainingMs, 0), config.maxDurationSeconds * 1000),
-    updatedAt: now,
-  };
 }
 
 function applyTimeDelta(clock: RoomClockState, side: CommandableSide | DebateSide, amountMs: number): RoomClockState {

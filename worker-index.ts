@@ -1,3 +1,4 @@
+import { ADMIN_SESSION_SUBJECT, requireAdmin, signSession } from "./worker-admin-auth";
 import {
   ChangePasswordInput,
   CreateRoomInput,
@@ -48,8 +49,6 @@ import { RoomDurableObject } from "./worker-room-object";
 import { RoomBootstrapPayload, WorkerEnv } from "./worker-types";
 
 export { RoomDurableObject };
-
-const ADMIN_SESSION_SUBJECT = "debate-host-admin";
 
 // ---------------------------------------------------------------------------
 // 限流参数（固定窗口）
@@ -209,20 +208,6 @@ async function handleAdminLogin(request: Request, env: WorkerEnv): Promise<Respo
   const token = await signSession({ sub: ADMIN_SESSION_SUBJECT, exp: expiresAt }, env.ADMIN_SESSION_SECRET);
 
   return json({ token, expiresAt });
-}
-
-async function requireAdmin(request: Request, env: WorkerEnv): Promise<Response | null> {
-  const token = getBearerToken(request);
-  if (!token) {
-    return json({ error: "缺少后台令牌" }, 401);
-  }
-
-  const payload = await verifySession(token, env.ADMIN_SESSION_SECRET);
-  if (!payload || payload.sub !== ADMIN_SESSION_SUBJECT || payload.exp < Date.now()) {
-    return json({ error: "后台令牌无效或已过期" }, 401);
-  }
-
-  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -830,62 +815,6 @@ function getBearerToken(request: Request): string {
   return header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
 }
 
-async function signSession(
-  payload: { sub: string; exp: number },
-  secret: string,
-): Promise<string> {
-  const data = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
-  const signature = await sign(data, secret);
-  return `${data}.${signature}`;
-}
-
-async function verifySession(
-  token: string,
-  secret: string,
-): Promise<{ sub: string; exp: number } | null> {
-  const [data, signature] = token.split(".");
-  if (!data || !signature) {
-    return null;
-  }
-
-  const expected = await sign(data, secret);
-  if (!timingSafeEqualString(expected, signature)) {
-    return null;
-  }
-
-  try {
-    const jsonText = new TextDecoder().decode(base64UrlDecode(data));
-    return JSON.parse(jsonText) as { sub: string; exp: number };
-  } catch {
-    return null;
-  }
-}
-
-function timingSafeEqualString(left: string, right: string): boolean {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  let diff = 0;
-  for (let index = 0; index < left.length; index += 1) {
-    diff |= left.charCodeAt(index) ^ right.charCodeAt(index);
-  }
-
-  return diff === 0;
-}
-
-async function sign(data: string, secret: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
-  return base64UrlEncode(new Uint8Array(signature));
-}
-
 async function readJsonBody<T>(request: Request): Promise<T> {
   const text = await request.clone().text();
   if (!text) {
@@ -897,22 +826,6 @@ async function readJsonBody<T>(request: Request): Promise<T> {
   } catch {
     throw new Error("请求体不是合法 JSON");
   }
-}
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  let binary = "";
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function base64UrlDecode(value: string): Uint8Array {
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
 function json(body: unknown, status = 200): Response {
@@ -956,7 +869,7 @@ function shouldServeAppShell(request: Request, url: URL): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// 房间（Durable Object 代理），保持原样
+// 房间（Durable Object 代理）
 // ---------------------------------------------------------------------------
 
 async function handleAdminRoomsList(env: WorkerEnv): Promise<Response> {
@@ -992,6 +905,7 @@ async function handleAdminCreateRoom(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: request.headers.get("Authorization")!,
       },
       body: JSON.stringify(payload),
     }),
@@ -1017,11 +931,23 @@ async function handleAdminDeleteRoom(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: request.headers.get("Authorization")!,
       },
       body: JSON.stringify({ roomId, origin }),
     }),
   );
 }
+
+// Public clients must never reach the room object's internal admin endpoints.
+const PUBLIC_ROOM_METHODS: Readonly<Record<string, readonly string[]>> = {
+  access: ["GET", "POST"],
+  events: ["GET"],
+  command: ["POST"],
+  barrage: ["POST"],
+  reaction: ["POST"],
+  signal: ["POST"],
+  signals: ["GET"],
+};
 
 async function proxyRoomRequest(request: Request, env: WorkerEnv): Promise<Response> {
   const url = new URL(request.url);
@@ -1031,6 +957,18 @@ async function proxyRoomRequest(request: Request, env: WorkerEnv): Promise<Respo
 
   if (!roomId || !tail) {
     return json({ error: "房间路径不完整" }, 404);
+  }
+
+  const methods = Object.prototype.hasOwnProperty.call(PUBLIC_ROOM_METHODS, tail)
+    ? PUBLIC_ROOM_METHODS[tail]
+    : undefined;
+  if (!methods) {
+    return json({ error: "未知房间接口" }, 404);
+  }
+  if (!methods.includes(request.method)) {
+    const response = json({ error: "该房间接口不支持此请求方法" }, 405);
+    response.headers.set("Allow", methods.join(", "));
+    return response;
   }
 
   const stub = env.ROOMS.get(env.ROOMS.idFromName(roomId));

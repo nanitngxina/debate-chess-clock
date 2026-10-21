@@ -185,6 +185,8 @@ export interface RoomAccessPayload {
   role: RoomRole;
   permissions: RolePermissions;
   links?: RoomLinkBundle;
+  /** 所有已授权角色可分享的观众链接；首个 SSE 快照到达时可能尚未取得。 */
+  viewerLink?: string;
   serverNow: number;
   onlineCount: number;
   onlineByRole: OnlineByRole;
@@ -316,6 +318,7 @@ export type RoomCommand =
   | { type: "reject-public-voice"; clientId: string };
 
 export interface CommandRequest {
+  clientKey?: string;
   role: RoomRole;
   token: string;
   command: RoomCommand;
@@ -354,6 +357,7 @@ export type VoiceSignalPayload =
   | { type: "leave" };
 
 export interface VoiceSignalRequest {
+  clientKey?: string;
   role: RoomRole;
   token: string;
   clientId: string;
