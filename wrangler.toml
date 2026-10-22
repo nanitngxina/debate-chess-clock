@@ -1,4 +1,7 @@
 name = "debate-cage-clock"
+# 账号迁移 2026-10-22：旧账号（abhishekwali869@gmail.com）已无法登录，迁到新账号。
+# 显式写死 account_id，避免 wrangler 从本地缓存里读到旧的账号 ID。
+account_id = "d888325436f6432e6695d5aaee0a8b43"
 main = "worker-index.ts"
 compatibility_date = "2026-03-18"
 compatibility_flags = ["enable_request_signal"]
@@ -30,14 +33,14 @@ class_name = "RoomDurableObject"
 # 线上这个 id 是 2026-09-23 用 npx wrangler kv namespace create ROOM_DIRECTORY 创建的
 [[kv_namespaces]]
 binding = "ROOM_DIRECTORY"
-id = "d87949ec50ed49f6b4eedf3dabb9289a"
+id = "b60696d5d8f240acbeac5da7964e2cf2"
 
 # 账号数据（账号、会话、验证码、限流、发信记录）存 D1
 # 建表：npx wrangler d1 migrations apply DB --remote
 [[d1_databases]]
 binding = "DB"
 database_name = "debate-cage-clock-accounts"
-database_id = "68948f4c-d306-447f-942f-2b5e47eb4599"
+database_id = "e815192b-8188-44bc-a4ae-86d9495fd5b6"
 migrations_dir = "migrations"
 
 # ---------------------------------------------------------------------------
@@ -47,7 +50,7 @@ migrations_dir = "migrations"
 # 头像对象很小（≤1MB）且 key 唯一，KV 完全够用；免费额度 1GB / 10 万次读 / 1000 次写每天。
 [[kv_namespaces]]
 binding = "AVATAR_OBJECTS"
-id = "92f5ace1710245669bff239ab17ec265"
+id = "f420e3496e75403f97af77f77bf7d527"
 
 # 【后端二：R2】未启用 —— 绑定先注释掉。
 # 尝试创建 bucket 时 Cloudflare 返回：
