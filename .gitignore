@@ -20,6 +20,10 @@ dist-ssr
 # wrangler deploy --dry-run 的输出
 .dry-run-dist
 
+# 本地工具产物 / 交接包（不要进仓库；.codex-tmp 有 150MB+）
+.codex-tmp/
+debate-clock-handoff-*.zip
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
