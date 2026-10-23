@@ -204,15 +204,12 @@
   container-type: inline-size;
   position: relative;
   overflow: hidden;
-  border: 2px solid transparent;
+  border: 1px solid var(--border-strong);
   border-radius: var(--r-xl);
-  background: linear-gradient(#0b0e14, #0b0e14) padding-box,
-    var(--spectrum-flow) border-box;
+  background: #0b0e14;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.05) inset,
-    0 0 22px rgba(68, 177, 255, 0.14),
     0 30px 70px rgba(0, 0, 0, 0.55);
-  animation: spectrum-orbit 9s linear infinite;
 }
 
 .stage__status,
@@ -304,11 +301,9 @@
 }
 
 .stage-side.is-active {
-  border-color: transparent;
-  background: linear-gradient(#0d1118, #0d1118) padding-box,
-    var(--spectrum-flow) border-box;
-  box-shadow: 0 0 18px rgba(68, 177, 255, 0.1);
-  animation: spectrum-orbit 9s linear infinite;
+  border-color: var(--affirmative-line);
+  background: #0d1118;
+  box-shadow: 0 0 18px var(--affirmative-soft);
 }
 
 @container (max-width: 460px) {
