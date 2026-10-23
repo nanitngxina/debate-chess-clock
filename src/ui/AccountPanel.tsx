@@ -48,6 +48,7 @@ export function AccountPanel({
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState("");
 
   // 改密码
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -88,6 +89,7 @@ export function AccountPanel({
               : ACCOUNT_AVATAR_PRESETS[0]?.id ?? CUSTOM_AVATAR_ID),
     );
     setAvatarError(null);
+    setFailedAvatarUrl("");
   }, [account]);
 
   /** 界面上用来显示的地址（含本地上传时的临时预览图） */
@@ -206,6 +208,8 @@ export function AccountPanel({
     }
 
     setAvatarError(null);
+    setUploadedAvatarUrl("");
+    setUploadPreviewUrl("");
     setUploadingAvatar(true);
 
     void prepareAvatarUpload(file)
@@ -221,6 +225,7 @@ export function AccountPanel({
         setUploadPreviewUrl("");
       })
       .catch((uploadError) => {
+        setUploadPreviewUrl("");
         setAvatarError(uploadError instanceof Error ? uploadError.message : "头像上传失败");
       })
       .finally(() => {
@@ -252,6 +257,7 @@ export function AccountPanel({
                 displayName={previewName}
                 avatarUrl={displayAvatarUrl}
                 className="avatar avatar--xl"
+                onImageError={setFailedAvatarUrl}
               />
               <span className="account-preview__name">{previewName}</span>
               <span className="dim">{account.email}</span>
@@ -359,6 +365,12 @@ export function AccountPanel({
               {!uploadingAvatar && avatarChoice === UPLOAD_AVATAR_ID && (
                 <p className="field__hint">
                   再次点击「上传头像」可以替换图片，记得保存后才会生效。
+                </p>
+              )}
+
+              {displayAvatarUrl && failedAvatarUrl === displayAvatarUrl && (
+                <p className="feedback feedback--error">
+                  当前头像图片无法加载。请重新上传图片或选择其他头像，然后保存档案。
                 </p>
               )}
 
