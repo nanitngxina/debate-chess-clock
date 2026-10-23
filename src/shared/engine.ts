@@ -137,6 +137,7 @@ export function createRoomState(roomId: string, input: CreateRoomInput, tokens: 
     reactions: [],
     matchLog: [],
     voice: createVoiceState(),
+    victory: null,
     tokens,
     createdAt: now,
     updatedAt: now,
@@ -156,6 +157,7 @@ export function toPublicRoomState(room: RoomState): PublicRoomState {
     reactions: room.reactions.map((item) => ({ ...item })),
     matchLog: room.matchLog.map((item) => ({ ...item })),
     voice: cloneVoiceState(room.voice),
+    victory: room.victory ?? null,
     createdAt: room.createdAt,
     updatedAt: room.updatedAt,
   };
@@ -293,13 +295,16 @@ export function canExecuteCommand(role: RoomRole, room: RoomState, command: Room
     return isVoiceCommandAllowed(role, room, command);
   }
 
-  // Reset is an explicit host-only recovery action, including after a match ends.
-  // Every other normal match command is frozen once the result is final.
+  // 主持人可以随时判定胜方或重置；判定之后冻结常规比赛操作。
   if (role === "host" && command.type === "reset") {
     return true;
   }
 
-  if (isMatchFinished(room.clock, room.config)) {
+  if (role === "host" && command.type === "declare-winner") {
+    return command.side === "affirmative" || command.side === "negative";
+  }
+
+  if (room.victory || isMatchFinished(room.clock, room.config)) {
     return false;
   }
 
@@ -424,11 +429,22 @@ export function applyCommand(room: RoomState, command: RoomCommand, now: number,
         ...syncedRoom,
         clock: createClockState(config, now),
         roundHistory: [],
+        victory: null,
         updatedAt: now,
       };
       return {
         ...resetRoom,
         voice: syncVoiceStateWithClock(resetRoom.voice, resetRoom.clock),
+      };
+    }
+    case "declare-winner": {
+      const finalClock = { ...nextClock, isRunning: false };
+      return {
+        ...syncedRoom,
+        clock: finalClock,
+        voice: syncVoiceStateWithClock(syncedRoom.voice, finalClock),
+        victory: { side: command.side, declaredAt: now },
+        updatedAt: now,
       };
     }
     case "set-topic":
@@ -747,6 +763,9 @@ export function describeCommandEvents(
 
     case "reset":
       return [{ type: "match-reset", actorRole }];
+
+    case "declare-winner":
+      return [{ type: "winner-declared", side: command.side, actorRole }];
 
     case "set-topic":
       return before.topic === after.topic ? [] : [{ type: "topic-changed", actorRole }];

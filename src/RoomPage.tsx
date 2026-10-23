@@ -20,6 +20,7 @@ import { StatusBadge } from "./ui/StatusBadge";
 import { RulesEditor } from "./ui/RulesEditor";
 import { ShortcutHints } from "./ui/ShortcutHints";
 import { VoicePanel } from "./ui/VoicePanel";
+import { VictoryOverlay } from "./ui/VictoryOverlay";
 
 function readAccessFromQuery(): { role: RoomRole | null; token: string } {
   const searchParams = new URLSearchParams(window.location.search);
@@ -237,7 +238,8 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
    */
   const busy = pendingAction !== null;
   const shortcutClock = payload ? payload.room.clock : null;
-  const shortcutMatchFinished = Boolean(payload && isMatchFinished(payload.room.clock, payload.room.config));
+  const shortcutMatchFinished = Boolean(payload &&
+    (payload.room.victory || isMatchFinished(payload.room.clock, payload.room.config)));
   const shortcutIsHost = Boolean(payload?.permissions.canModerate);
   const shortcutSide = payload?.permissions.controlledSide ?? null;
   const shortcutCanEndMyTurn = Boolean(
@@ -349,18 +351,23 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
   // 切换发言方时给出 SWITCHING 状态（回合横幅由 RoomStage 自己管）
   const stageBanner = pendingAction === "switch" ? "Switching…" : null;
   const mySide = payload.permissions.controlledSide;
+  const matchFinished = Boolean(room.victory) || isMatchFinished(clock, room.config);
   const canEndMyTurn = Boolean(
-    payload.permissions.canEndOwnTurn && mySide && clock.activeSide === mySide,
+    !matchFinished && payload.permissions.canEndOwnTurn && mySide && clock.activeSide === mySide,
   );
   const isHostView = payload.permissions.canModerate;
   const isViewer = role === "viewer";
 
-  /*
-    比赛结束态。判断放在引擎里（纯函数），这里只负责渲染。
-    结束时不显示"谁赢了" —— 赛制里没有正式胜负判定。
-  */
-  const matchFinished = isMatchFinished(clock, room.config);
+  /* 主持人可直接判定胜方，所有客户端收到同一份结果。 */
   const completedRounds = new Set(room.roundHistory.map((record) => record.round)).size;
+
+  const declareWinner = (side: "affirmative" | "negative") => {
+    const winner = side === "affirmative" ? "正方" : "反方";
+    const loser = side === "affirmative" ? "反方" : "正方";
+    if (window.confirm(`确定判定${winner}获胜、${loser}落败并结束比赛吗？`)) {
+      void runCommand({ type: "declare-winner", side }, "winner");
+    }
+  };
 
   const matchEndElement = matchFinished ? (
     <MatchEnd
@@ -379,6 +386,7 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
         },
       ]}
       rounds={completedRounds}
+      winner={room.victory?.side ?? null}
       canRestart={isHostView}
       restarting={pendingAction === "reset"}
       onViewLog={() => {
@@ -394,6 +402,7 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
       onShare={() => {
         void handleShareMatch();
       }}
+      onDeclareWinner={declareWinner}
     />
   ) : null;
 
@@ -450,6 +459,7 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
   if (isHostView) {
     return (
       <div className="room room--host">
+        <VictoryOverlay victory={room.victory ?? null} />
         {roomBar}
         {feedbackBar}
 
@@ -468,6 +478,16 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
               }
             }}
           >
+            {!matchFinished && (
+              <div className="deck__row deck__row--verdict">
+                <span className="u-label">判定胜负 · 点击后结束比赛</span>
+                <button type="button" className="btn btn--lg deck__verdict deck__verdict--aff"
+                  disabled={busy} onClick={() => declareWinner("affirmative")}>判定正方胜</button>
+                <button type="button" className="btn btn--lg deck__verdict deck__verdict--neg"
+                  disabled={busy} onClick={() => declareWinner("negative")}>判定反方胜</button>
+              </div>
+            )}
+
             {!matchFinished && <div className="deck__row">
               <button
                 type="button"
@@ -881,6 +901,7 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
 
   return (
     <div className={`room ${isViewer ? "room--viewer" : "room--debater"}`}>
+      <VictoryOverlay victory={room.victory ?? null} />
       {roomBar}
       {feedbackBar}
 

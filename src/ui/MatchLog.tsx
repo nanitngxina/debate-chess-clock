@@ -42,6 +42,8 @@ function describeEvent(event: MatchEvent): string {
     }
     case "match-reset":
       return "比赛已重置";
+    case "winner-declared":
+      return `主持人宣布${sideName(event.side)}胜利`;
     case "topic-changed":
       return "更新了辩题";
     case "rules-changed":

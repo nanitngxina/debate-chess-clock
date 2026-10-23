@@ -230,10 +230,41 @@ test("room state version survives a Durable Object restart and remains monotonic
   assert.ok(afterMutation.stateVersion > afterRestart.stateVersion);
 });
 
+test("host can end an active match with an explicit winner, and reset clears the result", async () => {
+  const f = fixture();
+  const { room } = await f.create();
+  const hostToken = new URL(room.links.host).searchParams.get("token");
+  const viewerToken = new URL(room.links.viewer).searchParams.get("token");
+  const base = `/api/rooms/${room.roomId}`;
+  const command = (role, token, value) => f.call(`${base}/command`, "POST", {
+    role, token, command: value,
+  });
+
+  assert.equal((await command("viewer", viewerToken, { type: "declare-winner", side: "negative" })).status, 403);
+  assert.equal((await command("host", hostToken, { type: "declare-winner", side: "other" })).status, 403);
+  assert.equal((await command("host", hostToken, { type: "resume" })).status, 200);
+
+  const declared = await command("host", hostToken, { type: "declare-winner", side: "negative" });
+  assert.equal(declared.status, 200);
+  const result = await declared.json();
+  assert.equal(result.room.victory.side, "negative");
+  assert.equal(result.room.clock.isRunning, false);
+  assert.ok(result.room.clock.totalRemainingMs > 0, "host can declare a winner before timeout");
+  assert.equal(result.room.matchLog.at(-1).type, "winner-declared");
+  assert.equal((await command("host", hostToken, { type: "resume" })).status, 409);
+
+  const viewerResult = await f.call(`${base}/access?role=viewer&token=${viewerToken}`);
+  assert.equal((await viewerResult.json()).room.victory.side, "negative");
+  const reset = await command("host", hostToken, { type: "reset" });
+  assert.equal((await reset.json()).room.victory, null);
+  assert.equal((await command("host", hostToken, { type: "resume" })).status, 200);
+});
+
 test("round count is display-only and exhausted matches reject ordinary host commands", async () => {
   const f = fixture();
   const { room } = await f.create();
   const hostToken = new URL(room.links.host).searchParams.get("token");
+  const viewerToken = new URL(room.links.viewer).searchParams.get("token");
   const base = `/api/rooms/${room.roomId}`;
   const command = (value) => f.call(`${base}/command`, "POST", {
     role: "host", token: hostToken, command: value,
@@ -261,12 +292,24 @@ test("round count is display-only and exhausted matches reject ordinary host com
     assert.equal((await command(ordinaryCommand)).status, 409);
   }
 
+  assert.equal((await f.call(`${base}/command`, "POST", {
+    role: "viewer", token: viewerToken, command: { type: "declare-winner", side: "negative" },
+  })).status, 409);
+  assert.equal((await command({ type: "declare-winner", side: "other" })).status, 409);
+
+  const declared = await command({ type: "declare-winner", side: "affirmative" });
+  assert.equal(declared.status, 200);
+  assert.equal((await declared.json()).room.victory.side, "affirmative");
+  const viewerResult = await f.call(`${base}/access?role=viewer&token=${viewerToken}`);
+  assert.equal((await viewerResult.json()).room.victory.side, "affirmative");
+
   const reset = await command({ type: "reset" });
   assert.equal(reset.status, 200);
   const resetPayload = await reset.json();
   assert.equal(resetPayload.room.clock.currentRound, 1);
   assert.equal(resetPayload.room.clock.isRunning, false);
   assert.equal(resetPayload.room.roundHistory.length, 0);
+  assert.equal(resetPayload.room.victory, null);
 });
 
 test("public room proxy cannot create a room through its internal admin path", async () => {

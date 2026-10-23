@@ -5,8 +5,7 @@ import { StatusBadge } from "./StatusBadge";
 /**
  * 比赛结束态。
  *
- * 只呈现事实：双方各自还剩多少时间、已经打了几个回合。
- * **不显示"谁赢了"** —— 当前赛制里没有正式的胜负判定，编一个出来就是假数据。
+ * 显示计时结果；胜方只由主持人明确选定，不根据剩余时间推断。
  */
 
 interface MatchEndSide {
@@ -20,22 +19,26 @@ interface MatchEndProps {
   sides: MatchEndSide[];
   /** 已经进行的回合数 */
   rounds: number;
+  winner: DebateSide | null;
   /** 只有主持人能重新开始 */
   canRestart: boolean;
   restarting?: boolean;
   onViewLog: () => void;
   onRestart: () => void;
   onShare: () => void;
+  onDeclareWinner: (side: DebateSide) => void;
 }
 
 export function MatchEnd({
   sides,
   rounds,
+  winner,
   canRestart,
   restarting = false,
   onViewLog,
   onRestart,
   onShare,
+  onDeclareWinner,
 }: MatchEndProps) {
   return (
     <section className="match-end">
@@ -63,6 +66,25 @@ export function MatchEnd({
           </div>
         ))}
       </dl>
+
+      {winner ? (
+        <p className={`match-end__winner match-end__winner--${winner}`}>
+          {winner === "affirmative" ? "正方胜利 · 反方落败" : "反方胜利 · 正方落败"}
+        </p>
+      ) : (
+        <p className="dim">胜负尚未判定，由主持人公布结果。</p>
+      )}
+
+      {canRestart && (
+        <div className="match-end__actions" aria-label="公布胜方">
+          <button type="button" className="btn btn--sm" disabled={restarting} onClick={() => onDeclareWinner("affirmative")}>
+            宣布正方胜利
+          </button>
+          <button type="button" className="btn btn--sm" disabled={restarting} onClick={() => onDeclareWinner("negative")}>
+            宣布反方胜利
+          </button>
+        </div>
+      )}
 
       <div className="match-end__actions">
         <button type="button" className="btn btn--sm" onClick={onViewLog}>

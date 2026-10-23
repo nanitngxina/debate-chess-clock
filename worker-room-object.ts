@@ -245,7 +245,7 @@ export class RoomDurableObject {
     const now = Date.now();
     const commandRoom = syncRoomState(currentRoom, now);
     if (!canExecuteCommand(payload.role, commandRoom, payload.command)) {
-      if (isMatchFinished(commandRoom.clock, commandRoom.config)) {
+      if (commandRoom.victory || isMatchFinished(commandRoom.clock, commandRoom.config)) {
         return json({ error: "比赛已结束，无法继续修改" }, 409);
       }
       return json({ error: "你没有执行该操作的权限" }, 403);

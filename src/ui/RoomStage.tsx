@@ -51,7 +51,9 @@ function buildSides(
       totalMs: Math.max(baseMs, remainingMs),
       active: isActiveSide && clock.isRunning,
       done: remainingMs <= 0,
-      statusLabel: isActiveSide && !clock.isRunning ? "已暂停" : undefined,
+      statusLabel: room.victory
+        ? room.victory.side === side ? "胜利" : "落败"
+        : isActiveSide && !clock.isRunning ? "已暂停" : undefined,
       // 真实比赛里也一样：最后 30 秒转琥珀、最后 10 秒转红
       ...urgencyFor(remainingMs),
     };
@@ -176,7 +178,7 @@ export const RoomStage = memo(function RoomStage({
       variant={only ? "solo" : "room"}
       isLive={clock.isRunning}
       hasStarted={room.clock.activeSide !== null || room.roundHistory.length > 0}
-      isFinished={isMatchFinished(clock, room.config)}
+      isFinished={Boolean(room.victory) || isMatchFinished(clock, room.config)}
       stageLabel={room.topic}
       roundProgress={{ current: clock.currentRound, max: room.config.maxRounds }}
       totalLabel={formatDurationFromMs(clock.totalRemainingMs)}

@@ -189,6 +189,21 @@
   flex-wrap: wrap;
 }
 
+.deck__row--verdict {
+  padding: var(--sp-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+}
+
+.deck__row--verdict .u-label { margin-right: var(--sp-2); }
+
+.deck__verdict--aff { border-color: var(--affirmative-line); color: var(--affirmative); }
+.deck__verdict--neg { border-color: var(--negative-line); color: var(--negative); }
+
+.deck__verdict--aff:hover { background: var(--affirmative-soft); }
+.deck__verdict--neg:hover { background: var(--negative-soft); }
+
 .deck__row--adjust,
 .deck__row--pick {
   padding-top: var(--sp-3);
@@ -408,7 +423,7 @@
 /* ---------------------------------------------------------------------------
    比赛结束态
    ---------------------------------------------------------------------------
-   只呈现事实（各自剩余时间、打了几个回合），不显示"谁赢了"。
+   胜方由主持人公布，不根据计时余额推断。
    --------------------------------------------------------------------------- */
 
 .match-end {
@@ -495,6 +510,110 @@
   flex-wrap: wrap;
   gap: var(--sp-2);
 }
+
+.match-end__winner {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.match-end__winner--affirmative { color: var(--affirmative); }
+.match-end__winner--negative { color: var(--negative); }
+
+.victory-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4);
+  background: rgba(5, 6, 10, 0.88);
+  overflow: hidden;
+  animation: victory-appear 0.35s ease-out both;
+}
+
+.victory-overlay__card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-3);
+  width: min(560px, 100%);
+  padding: clamp(32px, 7vw, 72px) var(--sp-5);
+  border: 2px solid transparent;
+  border-radius: var(--r-lg);
+  background: linear-gradient(var(--panel-1), var(--panel-1)) padding-box,
+    var(--spectrum-flow) border-box;
+  box-shadow: 0 0 90px var(--victory-glow);
+  text-align: center;
+  animation: spectrum-orbit 3s linear infinite, victory-rise 0.65s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.victory-overlay--affirmative { --victory-color: var(--affirmative); --victory-glow: var(--affirmative-glow); }
+.victory-overlay--negative { --victory-color: var(--negative); --victory-glow: var(--negative-glow); }
+
+.victory-overlay__eyebrow,
+.victory-overlay__caption {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.2em;
+}
+
+.victory-overlay__eyebrow { font-size: var(--fs-xs); }
+.victory-overlay__caption { font-size: var(--fs-sm); letter-spacing: 0.08em; }
+
+.victory-overlay__octagon {
+  display: grid;
+  place-items: center;
+  width: 100px;
+  height: 100px;
+  border: 3px solid var(--victory-color);
+  clip-path: polygon(29% 0, 71% 0, 100% 29%, 100% 71%, 71% 100%, 29% 100%, 0 71%, 0 29%);
+  color: var(--victory-color);
+  font-size: 52px;
+  box-shadow: inset 0 0 24px var(--victory-glow);
+  animation: victory-pulse 1.4s ease-in-out infinite;
+}
+
+.victory-overlay__side {
+  color: var(--victory-color);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: 0.3em;
+}
+
+.victory-overlay__title {
+  color: var(--text);
+  font-size: clamp(64px, 12vw, 112px);
+  line-height: 1;
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 36px var(--victory-glow);
+}
+
+.victory-overlay__dismiss {
+  margin-top: var(--sp-3);
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.victory-overlay__spark {
+  position: absolute;
+  width: 35vmin;
+  height: 35vmin;
+  border: 1px solid var(--victory-color);
+  opacity: 0.22;
+  transform: rotate(22.5deg);
+  animation: victory-spark 3s ease-out both;
+}
+
+.victory-overlay__spark--two { animation-delay: 0.3s; }
+
+@keyframes victory-appear { from { opacity: 0; } to { opacity: 1; } }
+@keyframes victory-rise { from { opacity: 0; transform: translateY(32px) scale(.94); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes victory-pulse { 50% { transform: scale(1.08); filter: brightness(1.5); } }
+@keyframes victory-spark { from { opacity: .35; transform: rotate(22.5deg) scale(.2); } to { opacity: 0; transform: rotate(112.5deg) scale(3.8); } }
 
 /* ---------------------------------------------------------------------------
    比赛事件时间线

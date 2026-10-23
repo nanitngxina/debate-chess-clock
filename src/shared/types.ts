@@ -73,6 +73,7 @@ export type MatchEventType =
   | "time-added"
   | "time-adjusted"
   | "match-reset"
+  | "winner-declared"
   | "topic-changed"
   | "rules-changed"
   | "sides-changed"
@@ -144,6 +145,7 @@ export interface RoomState {
   reactions: ReactionMessage[];
   matchLog: MatchEvent[];
   voice: VoiceState;
+  victory?: { side: DebateSide; declaredAt: number } | null;
   tokens: RoomTokens;
   createdAt: number;
   updatedAt: number;
@@ -161,6 +163,7 @@ export interface PublicRoomState {
   reactions: ReactionMessage[];
   matchLog: MatchEvent[];
   voice: VoiceState;
+  victory?: { side: DebateSide; declaredAt: number } | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -307,6 +310,7 @@ export type RoomCommand =
   | { type: "set-active-side"; side: DebateSide }
   | { type: "end-turn" }
   | { type: "reset" }
+  | { type: "declare-winner"; side: DebateSide }
   | { type: "set-topic"; topic: string }
   | { type: "set-rules"; rulesText: string }
   | { type: "set-sides"; sides: RoomSideInfo }
