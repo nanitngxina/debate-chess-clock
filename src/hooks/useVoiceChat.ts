@@ -352,7 +352,33 @@ export function useVoiceChat({
         ]);
       };
 
+      /*
+       * ICE 状态时间线（临时诊断，只打点、不改任何逻辑）。
+       *
+       * 每 3 秒的快照会漏掉"connecting → failed → 重建"的来回过程，
+       * 而单向音频失败的那次恰恰是卡在 connecting：
+       * 只看到快照的话，分不清是"从没连上"还是"连上又掉了"。
+       */
+      const startedAt = performance.now();
+      const logIceState = (event: string) => {
+        console.log(
+          "[语音诊断:ICE状态]",
+          JSON.stringify({
+            对端: remoteParticipant.clientId.slice(0, 8),
+            事件: event,
+            连接: connection.connectionState,
+            ICE: connection.iceConnectionState,
+            收集: connection.iceGatheringState,
+            毫秒: Math.round(performance.now() - startedAt),
+          }),
+        );
+      };
+
+      connection.oniceconnectionstatechange = () => logIceState("iceconnectionstatechange");
+
       connection.onconnectionstatechange = () => {
+        logIceState("connectionstatechange");
+
         if (connection.connectionState === "failed" || connection.connectionState === "closed") {
           closePeer(remoteParticipant.clientId);
         }
@@ -731,6 +757,8 @@ export function useVoiceChat({
       const negotiation = [...peersRef.current.entries()].map(([remoteClientId, record]) => ({
         对端: remoteClientId.slice(0, 8),
         连接: record.connection.connectionState,
+        ICE: record.connection.iceConnectionState,
+        收集: record.connection.iceGatheringState,
         本地音轨: localStreamRef.current?.getAudioTracks().length ?? 0,
         /*
          * 本地麦克风轨的状态 —— 这是之前的盲区。
@@ -778,22 +806,74 @@ export function useVoiceChat({
           const reports = await record.connection.getStats();
           let inbound: unknown = null;
           let outbound: unknown = null;
+          let capture: unknown = null;
+          let selectedPairId: string | null = null;
+          const byId = new Map<string, Record<string, unknown>>();
 
           reports.forEach((report) => {
             const item = report as unknown as Record<string, unknown>;
+            byId.set(String(item.id), item);
+
             if (item.type === "inbound-rtp" && item.kind === "audio") {
-              inbound = { 收包: item.packetsReceived ?? 0, 收字节: item.bytesReceived ?? 0 };
+              inbound = {
+                收包: item.packetsReceived ?? 0,
+                收字节: item.bytesReceived ?? 0,
+                /*
+                 * audioLevel 回答的是"收到的是不是有声的信号"，跟包数无关：
+                 *   包在涨 + 收音量恒 0 → 对方发过来的就是静音
+                 *   包不涨             → 媒体根本没到本机
+                 */
+                收音量: item.audioLevel ?? null,
+              };
             }
             if (item.type === "outbound-rtp" && item.kind === "audio") {
               outbound = { 发包: item.packetsSent ?? 0, 发字节: item.bytesSent ?? 0 };
             }
+            if (item.type === "media-source" && item.kind === "audio") {
+              // 本机麦克风有没有真的采到声音（采集静音 ≠ 发送失败）
+              capture = { 采集音量: item.audioLevel ?? null };
+            }
+            if (item.type === "transport") {
+              selectedPairId = (item.selectedCandidatePairId as string | undefined) ?? null;
+            }
           });
 
-          return { 对端: remoteClientId.slice(0, 8), 收: inbound, 发: outbound };
+          /*
+           * 选中的 candidate 对 —— "同 WiFi 通、跨网络不通"的唯一判据：
+           *   host / srflx → 直连或打洞成功
+           *   relay        → 走 TURN 中继
+           *   没有选中对    → ICE 根本没成（卡 connecting 那次就是这种）
+           */
+          const pair = selectedPairId ? byId.get(selectedPairId) ?? null : null;
+          const localCandidate = pair ? byId.get(String(pair.localCandidateId)) ?? null : null;
+          const remoteCandidate = pair ? byId.get(String(pair.remoteCandidateId)) ?? null : null;
+
+          return {
+            对端: remoteClientId.slice(0, 8),
+            收: inbound,
+            发: outbound,
+            采集: capture,
+            通路: pair
+              ? {
+                  本地: localCandidate?.candidateType ?? null,
+                  远端: remoteCandidate?.candidateType ?? null,
+                  协议: localCandidate?.protocol ?? null,
+                  RTT: pair.currentRoundTripTime ?? null,
+                }
+              : "未选中（ICE 未成）",
+          };
         }),
       );
 
-      console.log("[语音诊断]", JSON.stringify({ 协商: negotiation, 播放: playback, RTP: rtp }));
+      console.log(
+        "[语音诊断]",
+        JSON.stringify({
+          ICE服务器: ICE_SERVERS.map((server) => server.urls),
+          协商: negotiation,
+          播放: playback,
+          RTP: rtp,
+        }),
+      );
     })();
     }, 3000);
 
