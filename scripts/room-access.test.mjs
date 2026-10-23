@@ -197,6 +197,78 @@ test("voice identity supports leave, rejoin and room-object restart", async () =
   assert.equal((await (await f.poll(f.viewer)).json()).signals.length, 1);
 });
 
+test("room state version survives a Durable Object restart and remains monotonic", async () => {
+  const f = fixture();
+  const { room } = await f.create();
+  const hostToken = new URL(room.links.host).searchParams.get("token");
+  const base = `/api/rooms/${room.roomId}`;
+  const access = async () => (await f.call(`${base}/access?role=host&token=${hostToken}`)).json();
+
+  await f.call(`${base}/command`, "POST", {
+    role: "host", token: hostToken, command: { type: "set-topic", topic: "before restart" },
+  });
+  const beforeRestart = await access();
+  assert.ok(beforeRestart.stateVersion >= 2);
+
+  const entry = f.rooms.get(room.roomId);
+  const state = {
+    storage: {
+      get: async key => structuredClone(entry.values.get(key)),
+      put: async (key, value) => { entry.values.set(key, structuredClone(value)); },
+      delete: async key => entry.values.delete(key), setAlarm: async () => {}, deleteAlarm: async () => {},
+    },
+    blockConcurrencyWhile(fn) { entry.ready = fn(); return entry.ready; },
+  };
+  entry.object = new RoomDurableObject(state, f.env);
+
+  const afterRestart = await access();
+  assert.equal(afterRestart.stateVersion, beforeRestart.stateVersion);
+  await f.call(`${base}/command`, "POST", {
+    role: "host", token: hostToken, command: { type: "set-topic", topic: "after restart" },
+  });
+  const afterMutation = await access();
+  assert.ok(afterMutation.stateVersion > afterRestart.stateVersion);
+});
+
+test("round count is display-only and exhausted matches reject ordinary host commands", async () => {
+  const f = fixture();
+  const { room } = await f.create();
+  const hostToken = new URL(room.links.host).searchParams.get("token");
+  const base = `/api/rooms/${room.roomId}`;
+  const command = (value) => f.call(`${base}/command`, "POST", {
+    role: "host", token: hostToken, command: value,
+  });
+
+  assert.equal((await command({ type: "update-config", config: { ...DEFAULT_ROOM_INPUT.config, maxRounds: 1 } })).status, 200);
+  assert.equal((await command({ type: "set-active-side", side: "negative" })).status, 200);
+  const completed = await command({ type: "end-turn" });
+  assert.equal(completed.status, 200);
+  const completedPayload = await completed.json();
+  assert.equal(completedPayload.room.clock.currentRound, 2);
+  assert.equal(completedPayload.room.clock.isRunning, false);
+  const exhaustedPayload = await command({ type: "adjust-time", side: "total", amountSeconds: -75 * 60 });
+  assert.equal(exhaustedPayload.status, 200);
+  const exhausted = await exhaustedPayload.json();
+  assert.equal(exhausted.room.clock.totalRemainingMs, 0);
+  assert.equal(exhausted.room.clock.isRunning, false);
+
+  for (const ordinaryCommand of [
+    { type: "resume" },
+    { type: "end-turn" },
+    { type: "adjust-time", side: "affirmative", amountSeconds: 120 },
+    { type: "set-topic", topic: "must not rewrite finished record" },
+  ]) {
+    assert.equal((await command(ordinaryCommand)).status, 409);
+  }
+
+  const reset = await command({ type: "reset" });
+  assert.equal(reset.status, 200);
+  const resetPayload = await reset.json();
+  assert.equal(resetPayload.room.clock.currentRound, 1);
+  assert.equal(resetPayload.room.clock.isRunning, false);
+  assert.equal(resetPayload.room.roundHistory.length, 0);
+});
+
 test("public room proxy cannot create a room through its internal admin path", async () => {
   const f = fixture();
   const response = await f.call("/api/rooms/attack/admin/create", "POST", {
@@ -321,9 +393,9 @@ for (const role of ["host", "affirmative", "negative", "viewer"]) {
     ]) {
       assert.equal(response.status, 200);
       const payload = await response.json();
-      assert.equal(payload.viewerLink, room.links.viewer);
+      assert.equal(payload.viewerToken, new URL(room.links.viewer).searchParams.get("token"));
       if (role !== "host") assert.equal(payload.links, undefined);
-      const viewerToken = new URL(payload.viewerLink).searchParams.get("token");
+      const viewerToken = payload.viewerToken;
       assert.equal((await f.call(`${base}/access?role=viewer&token=${viewerToken}`)).status, 200);
       for (const claimedRole of ["host", "affirmative", "negative"]) {
         assert.equal((await f.call(`${base}/access?role=${claimedRole}&token=${viewerToken}`)).status, 403);

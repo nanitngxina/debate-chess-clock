@@ -93,6 +93,10 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
       throw new Error("请求超时，请重试");
     }
 
+    if (error instanceof TypeError) {
+      throw new Error("无法连接服务端，请检查网络；本地开发请同时启动 Worker API");
+    }
+
     throw error instanceof Error ? error : new Error("网络请求失败");
   } finally {
     clearTimeout(timeoutId);
@@ -271,9 +275,11 @@ export async function fetchRoomAccess(
   role: string,
   token: string,
   presenceId?: string,
+  signal?: AbortSignal,
 ): Promise<RoomAccessPayload> {
   return requestJson<RoomAccessPayload>(`/api/rooms/${encodeURIComponent(roomId)}/access`, {
     method: "POST",
+    signal,
     body: JSON.stringify({
       role,
       token,

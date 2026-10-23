@@ -204,7 +204,10 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
 
   /* 分享仅使用服务端给出的观众链接，绝不复制当前角色的授权地址。 */
   const handleShareMatch = async () => {
-    setFeedback(await copyViewerLink(payload?.viewerLink, (link) => navigator.clipboard.writeText(link)));
+    const viewerLink = payload?.viewerToken
+      ? `${window.location.origin}/room/${roomId}?role=viewer&token=${payload.viewerToken}`
+      : undefined;
+    setFeedback(await copyViewerLink(viewerLink, (link) => navigator.clipboard.writeText(link)));
   };
 
   /*
@@ -234,6 +237,7 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
    */
   const busy = pendingAction !== null;
   const shortcutClock = payload ? payload.room.clock : null;
+  const shortcutMatchFinished = Boolean(payload && isMatchFinished(payload.room.clock, payload.room.config));
   const shortcutIsHost = Boolean(payload?.permissions.canModerate);
   const shortcutSide = payload?.permissions.controlledSide ?? null;
   const shortcutCanEndMyTurn = Boolean(
@@ -251,21 +255,21 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
           label: "Space",
           description: shortcutClock.isRunning ? "暂停" : "开始",
           run: () => void runCommand({ type: shortcutClock.isRunning ? "pause" : "resume" }, "run"),
-          disabled: busy || settingsOpen,
+          disabled: busy || settingsOpen || shortcutMatchFinished,
         },
         {
           keys: ["s"],
           label: "S",
           description: "切换发言方",
           run: () => void runCommand({ type: "switch-side" }, "switch"),
-          disabled: busy || settingsOpen || shortcutClock.activeSide === null,
+          disabled: busy || settingsOpen || shortcutMatchFinished || shortcutClock.activeSide === null,
         },
         {
           keys: ["e"],
           label: "E",
           description: "结束当前回合",
           run: () => void runCommand({ type: "end-turn" }, "turn"),
-          disabled: busy || settingsOpen || shortcutClock.activeSide === null,
+          disabled: busy || settingsOpen || shortcutMatchFinished || shortcutClock.activeSide === null,
         },
         {
           keys: ["-"],
@@ -276,7 +280,7 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
               { type: "adjust-time", side: adjustTarget, amountSeconds: -10 },
               "shortcut-minus",
             ),
-          disabled: busy || settingsOpen || shortcutClock.isRunning,
+          disabled: busy || settingsOpen || shortcutMatchFinished || shortcutClock.isRunning,
         },
         {
           keys: ["=", "+"],
@@ -287,7 +291,7 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
               { type: "adjust-time", side: adjustTarget, amountSeconds: 10 },
               "shortcut-plus",
             ),
-          disabled: busy || settingsOpen || shortcutClock.isRunning,
+          disabled: busy || settingsOpen || shortcutMatchFinished || shortcutClock.isRunning,
         },
       );
     } else if (shortcutSide) {
@@ -297,7 +301,7 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
           label: "Space",
           description: shortcutCanEndMyTurn ? "结束本回合" : "轮到你方时才能结束",
           run: () => void runCommand({ type: "end-turn" }, "my-turn"),
-          disabled: busy || !shortcutCanEndMyTurn,
+          disabled: busy || shortcutMatchFinished || !shortcutCanEndMyTurn,
         },
         {
           keys: ["m"],
@@ -405,7 +409,7 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
             tone={connection === "live" ? "live" : "paused"}
             marker={connection === "live" ? "dot" : "pause"}
           >
-            {connection === "live" ? "Live" : describeConnection(connection)}
+            {describeConnection(connection)}
           </StatusBadge>
         </div>
 
@@ -464,7 +468,7 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
               }
             }}
           >
-            <div className="deck__row">
+            {!matchFinished && <div className="deck__row">
               <button
                 type="button"
                 className={`btn btn--lg ${clock.isRunning ? "btn--warn" : "btn--live"}`}
@@ -519,9 +523,9 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
               >
                 重新同步
               </button>
-            </div>
+            </div>}
 
-            <div className="deck__row deck__row--adjust">
+            {!matchFinished && <div className="deck__row deck__row--adjust">
               <span className="u-label">调整时间</span>
               <select
                 className="select deck__select"
@@ -579,9 +583,9 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
               </div>
 
               {clock.isRunning && <span className="dim">计时进行中不能调整时间</span>}
-            </div>
+            </div>}
 
-            <div className="deck__row deck__row--pick">
+            {!matchFinished && <div className="deck__row deck__row--pick">
               <span className="u-label">指定先发</span>
               <button
                 type="button"
@@ -603,9 +607,9 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
               >
                 反方先发
               </button>
-            </div>
+            </div>}
 
-            <ShortcutHints shortcuts={shortcuts} />
+            {!matchFinished && <ShortcutHints shortcuts={shortcuts} />}
           </section>
         </div>
 
@@ -811,7 +815,7 @@ function RoomPageInner({ roomId, role, token, account, onExit }: RoomPageInnerPr
                         />
                       </label>
                       <label className="field">
-                        <span className="field__label">回合总数（仅用于显示）</span>
+                        <span className="field__label">预计回合数（仅用于显示进度）</span>
                         <input
                           className="input input--num"
                           type="number"

@@ -131,7 +131,8 @@ const cases: Case[] = [
       "12:34",
       // 操作入口
       "创建比赛",
-      "进入房间",
+      "我有邀请链接",
+      "加入比赛",
       // 下方一条横向带：四种身份 + 一个时钟
       "四种身份",
       "各司其职",
@@ -193,7 +194,7 @@ const cases: Case[] = [
   {
     name: "auth-login",
     render: () => renderToString(createElement(AuthPanel, { session: fakeSession })),
-    expect: ["登录", "邮箱", "密码", "忘记密码", "显示密码"],
+    expect: ["登录", "邮箱", "密码", "忘记密码？", "显示密码"],
   },
   {
     name: "auth-register",
@@ -237,7 +238,7 @@ const cases: Case[] = [
       renderToString(
         createElement(RoomStage, { room: fakeRoom, serverOffset: 0, showRunState: true }),
       ),
-    expect: ["示范辩题", "正方甲", "反方乙", "当前发言", "Live", "Total time"],
+    expect: ["示范辩题", "正方甲", "反方乙", "当前发言", "计时中", "Total time"],
   },
   {
     name: "room-stage-solo",

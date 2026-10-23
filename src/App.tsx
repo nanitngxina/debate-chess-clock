@@ -42,7 +42,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "auto" });
   }
 
-  // 受保护页面在未登录时显示登录入口；公开页面（首页/指南/关于）任何人都能看
+  // 创建控制台要求账号；房间邀请链接使用自身的角色令牌授权，可免登录查看。
   const blocked = routeRequiresAccount(route) && !session.hasAccount;
 
   return (
@@ -63,9 +63,10 @@ export default function App() {
             <div className="gate__inner">
               <div className="gate__brand">
                 <BrandMark size={40} />
-                <h1 className="gate__title">先登录，再进入</h1>
+                <span className="u-label">主持人入口</span>
+                <h1 className="gate__title">准备开赛</h1>
                 <p className="gate__note">
-                  主持人控制台和比赛房间需要账号；首页、使用指南和关于可以随便看。
+                  登录后创建比赛；加入比赛只需主持人发来的邀请链接。
                 </p>
               </div>
 

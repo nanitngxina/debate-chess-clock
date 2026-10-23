@@ -172,8 +172,8 @@ export function AccountPanel({
       return;
     }
 
-    if (newPassword.length < 8 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-      setPasswordError("新密码至少 8 位，且同时包含字母和数字");
+    if (Array.from(newPassword).length < 6) {
+      setPasswordError("新密码至少 6 个字符");
       return;
     }
 
@@ -406,7 +406,7 @@ export function AccountPanel({
                   type="password"
                   value={newPassword}
                   autoComplete="new-password"
-                  placeholder="至少 8 位，含字母和数字"
+                  placeholder="至少 6 个字符"
                   onChange={(event) => setNewPassword(event.target.value)}
                 />
               </label>

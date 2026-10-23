@@ -7,6 +7,7 @@ import {
   RegisterInput,
   ResetPasswordInput,
   RoomSummary,
+  RoomLinkBundle,
 } from "./src/shared/types";
 import {
   AuthCodePurpose,
@@ -141,7 +142,7 @@ const worker: ExportedHandler<WorkerEnv> = {
           return adminError;
         }
 
-        return handleAdminRoomsList(env);
+        return handleAdminRoomsList(request, env, url.origin);
       }
 
       if (url.pathname === "/api/admin/rooms" && request.method === "POST") {
@@ -872,9 +873,9 @@ function shouldServeAppShell(request: Request, url: URL): boolean {
 // 房间（Durable Object 代理）
 // ---------------------------------------------------------------------------
 
-async function handleAdminRoomsList(env: WorkerEnv): Promise<Response> {
+async function handleAdminRoomsList(request: Request, env: WorkerEnv, origin: string): Promise<Response> {
   const listed = await env.ROOM_DIRECTORY.list({ prefix: "room:" });
-  const rooms = (
+  const summaries = (
     await Promise.all(
       listed.keys.map(async (key) => env.ROOM_DIRECTORY.get<RoomSummary>(key.name, { type: "json" })),
     )
@@ -882,7 +883,18 @@ async function handleAdminRoomsList(env: WorkerEnv): Promise<Response> {
     .filter((room): room is RoomSummary => Boolean(room))
     .sort((left, right) => right.updatedAt - left.updatedAt);
 
-  return json({ rooms });
+  const rooms = await Promise.all(summaries.map(async (summary) => {
+    const stub = env.ROOMS.get(env.ROOMS.idFromName(summary.roomId));
+    const response = await stub.fetch(new Request(`${origin}/admin/links`, {
+      method: "GET",
+      headers: { Authorization: request.headers.get("Authorization") ?? "" },
+    }));
+    if (!response.ok) return null;
+    const payload = await response.json() as { links?: RoomLinkBundle };
+    return payload.links ? { ...summary, links: payload.links } : null;
+  }));
+
+  return json({ rooms: rooms.filter((room): room is RoomSummary => Boolean(room)) });
 }
 
 async function handleAdminCreateRoom(

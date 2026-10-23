@@ -167,8 +167,8 @@ function Check {
 $stamp = [DateTime]::Now.ToString('HHmmss')
 $script:clientIp = "203.0.113.$((Get-Random -Minimum 2 -Maximum 250))"
 $email = "tester$stamp@example.com"
-$password = 'Debate12345'
-$newPassword = 'Debate67890'
+$password = '!!!!!!'
+$newPassword = 'abcdef'
 
 Write-Output "=== 1. register ($email) ==="
 $reg = Call-Api -Method POST -Path '/api/auth/register' -Body @{
@@ -259,7 +259,7 @@ $forgotGhost = Call-Api -Method POST -Path '/api/auth/password/forgot' -Body @{ 
 Check 'forgot does not leak unknown email' ($forgotGhost.Status -eq 200 -and -not $forgotGhost.Data.devCode) $forgotGhost.Text
 
 Write-Output "=== 13. reset password ==="
-$resetPassword = 'Debate24680'
+$resetPassword = '123456'
 $reset = Call-Api -Method POST -Path '/api/auth/password/reset' -Body @{
   email       = $email
   code        = $forgot.Data.devCode
@@ -283,7 +283,7 @@ Check 'logout really revokes token' ($afterLogout.Status -eq 401) $afterLogout.T
 Write-Output "=== 15. weak password rejected ==="
 $weak = Call-Api -Method POST -Path '/api/auth/register' -Body @{
   email       = "weak$stamp@example.com"
-  password    = 'abc'
+  password    = '12345'
   displayName = 'weak'
 }
 Check 'weak password rejected' ($weak.Status -eq 400) $weak.Text

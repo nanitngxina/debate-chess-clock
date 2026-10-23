@@ -180,12 +180,12 @@ export function TimerLab({
   banner,
 }: TimerLabProps) {
   const stageStatus = isFinished
-    ? { tone: "plain" as const, marker: "hollow" as const, label: "Ended" }
+    ? { tone: "plain" as const, marker: "hollow" as const, label: "比赛已结束" }
     : isLive
-      ? { tone: "live" as const, marker: "dot" as const, label: "Live" }
+      ? { tone: "live" as const, marker: "dot" as const, label: "计时中" }
       : hasStarted
-        ? { tone: "paused" as const, marker: "pause" as const, label: "Paused" }
-        : { tone: "plain" as const, marker: "hollow" as const, label: "Standby" };
+        ? { tone: "paused" as const, marker: "pause" as const, label: "已暂停" }
+        : { tone: "plain" as const, marker: "hollow" as const, label: "待开始" };
 
   return (
     <div className={`timer-lab timer-lab--${variant}`}>

@@ -14,22 +14,23 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
         </p>
       </header>
 
-      <section className="section">
+      <section className="section about-story">
         <div className="prose">
           <p>
-            线下辩论计时通常依赖一个实物棋钟，或者主持人电脑上的一个程序投到大屏。
-            结果是辩手看不到自己的剩余时间，观众不知道还剩多久，
-            而一旦有人线上参加，就完全没法共用一个时钟。
+            线下比赛常把一个棋钟投到大屏，辩手和远程观众却不一定能看清自己的剩余时间。
+            八角笼让每个人在自己的设备上看到同一场比赛。
           </p>
           <p>
-            八角笼把<strong>比赛状态交给服务端维护</strong>：房间状态由 Cloudflare
-            Durable Object 保管，所有端订阅同一个房间。所以无论谁在什么时候进来，
-            看到的一定是同一个时间、同一个回合、同一个比赛状态。
+            主持人创建房间并分发专属链接。正方、反方和观众按各自身份入场，
+            <strong>时间、回合和比赛状态实时同步</strong>；临时比赛也能迅速开始。
           </p>
-          <p>
-            权限写在链接里而不是账号里。正方、反方、观众拿到各自的链接就能进场，
-            不需要注册流程——这对临时比赛和社团内部演练很重要。
-          </p>
+        </div>
+        <div className="about-story__signal" aria-label="所有设备同步看到比赛状态">
+          <span className="u-label">One room · One clock</span>
+          <strong>同一场比赛，同一个现场。</strong>
+          <span>同一个时间</span>
+          <span>同一个回合</span>
+          <span>同一个比赛状态</span>
         </div>
       </section>
 

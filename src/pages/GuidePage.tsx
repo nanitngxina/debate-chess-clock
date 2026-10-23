@@ -13,14 +13,20 @@ export function GuidePage({ onNavigate }: GuidePageProps) {
         </p>
       </header>
 
-      <section className="section">
+      <section className="section guide-flow">
+        <div className="section__head">
+          <div>
+            <h2 className="section__title">三步进入比赛</h2>
+            <p className="section__subtitle">创建房间、分享入口、开始计时</p>
+          </div>
+        </div>
         <ol className="steps">
           <li className="step">
             <span className="step__index">01</span>
             <div>
               <h2 className="step__title">主持人开房</h2>
               <p className="step__body">
-                进入控制台，用后台口令登录，填写辩题、双方名称和计时配置，创建房间。
+                先注册或登录账号进入控制台，再输入后台口令获得开房权限。填写辩题、双方名称和计时配置后创建房间。
                 系统会为这一场比赛生成一个房间号。
               </p>
             </div>
@@ -36,7 +42,7 @@ export function GuidePage({ onNavigate }: GuidePageProps) {
               <ul>
                 <li>主持人链接 —— 完整控制权</li>
                 <li>正方链接 / 反方链接 —— 只能结束自己一方的回合</li>
-                <li>观众链接 —— 观看、弹幕，可申请上麦</li>
+                <li>观众链接 —— 无需登录即可观看；登录账号后可发送弹幕、申请上麦</li>
               </ul>
             </div>
           </li>
@@ -173,14 +179,14 @@ export function GuidePage({ onNavigate }: GuidePageProps) {
           <div className="def">
             <span className="def__term">观众</span>
             <p className="def__desc">
-              无需登录即可观看，发送弹幕参与互动；想发言可以申请上麦，由主持人批准。
+              使用观众链接无需登录即可观看。登录账号后可发送弹幕；想发言可以申请上麦，由主持人批准。
             </p>
           </div>
           <div className="def">
-            <span className="def__term">账号（可选）</span>
+            <span className="def__term">账号登录</span>
             <p className="def__desc">
-              注册账号后，你的出场名称和头像会跟着账号走，换设备也在，
-              并且能在忘记密码时自助找回。
+              主持人创建比赛需要先注册或登录账号，再输入后台口令；两者不是同一个密码。
+              观众观看和辩手使用专属链接无需账号。登录账号后可跨设备保存出场名称和头像。
             </p>
           </div>
         </div>

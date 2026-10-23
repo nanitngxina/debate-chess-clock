@@ -35,7 +35,7 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background-image: url("/hero-arena.jpg");
+  background-image: url("/hero-arena-v2.jpg");
   background-size: cover;
   background-position: 68% 46%;
   background-repeat: no-repeat;
@@ -180,6 +180,12 @@
   max-width: 440px;
 }
 
+.hero__join-hint {
+  margin-top: var(--sp-4);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
 .hero__join .input {
   flex: 1 1 auto;
   min-width: 0;
@@ -198,12 +204,15 @@
   container-type: inline-size;
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--border-strong);
+  border: 2px solid transparent;
   border-radius: var(--r-xl);
-  background: rgba(9, 11, 15, 0.78);
+  background: linear-gradient(#0b0e14, #0b0e14) padding-box,
+    var(--spectrum-flow) border-box;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 0 22px rgba(68, 177, 255, 0.14),
     0 30px 70px rgba(0, 0, 0, 0.55);
+  animation: spectrum-orbit 9s linear infinite;
 }
 
 .stage__status,
@@ -280,16 +289,32 @@
 .stage__sides {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+  padding-block: var(--sp-4);
   border-bottom: 1px solid var(--border-soft);
 }
 
 .stage-side {
-  padding-block: clamp(14px, 2.6cqw, 22px);
+  min-width: 0;
+  padding: clamp(14px, 2.6cqw, 22px);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: #0d1118;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-.stage-side + .stage-side {
-  padding-left: clamp(14px, 2.4cqw, 22px);
-  border-left: 1px solid var(--border-soft);
+.stage-side.is-active {
+  border-color: transparent;
+  background: linear-gradient(#0d1118, #0d1118) padding-box,
+    var(--spectrum-flow) border-box;
+  box-shadow: 0 0 18px rgba(68, 177, 255, 0.1);
+  animation: spectrum-orbit 9s linear infinite;
+}
+
+@container (max-width: 460px) {
+  .stage__sides {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .stage-side__label {
@@ -320,6 +345,9 @@
   display: flex;
   align-items: baseline;
   margin-top: var(--sp-2);
+  font-family: var(--font-timer);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
   font-size: clamp(1.75rem, 10.4cqw, 4.05rem);
   font-weight: 700;
   line-height: 1.02;
@@ -438,6 +466,7 @@
 }
 
 .stage__total-value {
+  font-family: var(--font-timer);
   display: block;
   margin-top: var(--sp-2);
   font-size: clamp(1.25rem, 4.2cqw, 1.75rem);
@@ -701,6 +730,15 @@
 }
 
 @media (max-width: 560px) {
+  .hero__art {
+    background-position: 83% center;
+    opacity: 0.6;
+  }
+
+  .hero__art::after {
+    background: linear-gradient(180deg, rgba(8, 9, 12, 0.84), rgba(8, 9, 12, 0.72) 58%, var(--bg));
+  }
+
   .hero__cta,
   .hero__actions .btn {
     flex: 1 1 100%;

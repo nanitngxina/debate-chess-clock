@@ -20,8 +20,7 @@ const MAX_AVATAR_URL_LENGTH = 2000;
 export const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 天
 export const CODE_TTL_MS = 1000 * 60 * 15; // 验证码 15 分钟
 export const CODE_MAX_ATTEMPTS = 5;
-export const PASSWORD_MIN_LENGTH = 8;
-export const PASSWORD_MAX_LENGTH = 200;
+export const PASSWORD_MIN_LENGTH = 6;
 export const DISPLAY_NAME_MAX_LENGTH = 20;
 export const EMAIL_MAX_LENGTH = 254;
 export const DEFAULT_PASSWORD_ITERATIONS = 100_000;
@@ -240,16 +239,8 @@ export function validatePassword(value: unknown): string | null {
     return "请填写密码";
   }
 
-  if (password.length < PASSWORD_MIN_LENGTH) {
-    return `密码至少 ${PASSWORD_MIN_LENGTH} 位`;
-  }
-
-  if (password.length > PASSWORD_MAX_LENGTH) {
-    return `密码不能超过 ${PASSWORD_MAX_LENGTH} 位`;
-  }
-
-  if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-    return "密码需要同时包含字母和数字";
+  if (Array.from(password).length < PASSWORD_MIN_LENGTH) {
+    return `密码至少 ${PASSWORD_MIN_LENGTH} 个字符`;
   }
 
   return null;

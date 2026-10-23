@@ -10,7 +10,7 @@ interface AuthPanelProps {
   onClose?: () => void;
 }
 
-const PASSWORD_HINT = "至少 8 位，同时包含字母和数字";
+const PASSWORD_HINT = "至少 6 个字符";
 
 const MODE_COPY: Record<AuthMode, { label: string; title: string; desc: string }> = {
   login: {
@@ -36,12 +36,8 @@ const MODE_COPY: Record<AuthMode, { label: string; title: string; desc: string }
 };
 
 function validatePasswordLocally(value: string): string | null {
-  if (value.length < 8) {
-    return "密码至少 8 位";
-  }
-
-  if (!/[a-zA-Z]/.test(value) || !/[0-9]/.test(value)) {
-    return "密码需要同时包含字母和数字";
+  if (Array.from(value).length < 6) {
+    return "密码至少 6 个字符";
   }
 
   return null;
@@ -73,6 +69,7 @@ export function AuthPanel({ session, initialMode = "login", onClose }: AuthPanel
 
   function switchMode(next: AuthMode) {
     setMode(next);
+    session.clearError();
     setLocalError(null);
     setNotice(null);
     setDevHint(null);

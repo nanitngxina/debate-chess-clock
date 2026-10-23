@@ -46,25 +46,28 @@
 /* 编号步骤 */
 .steps {
   display: grid;
-  gap: 0;
-  border-top: 1px solid var(--border-soft);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
 }
 
 .step {
   display: grid;
-  grid-template-columns: 56px 1fr;
-  gap: var(--sp-5);
-  padding-block: var(--sp-6);
-  border-bottom: 1px solid var(--border-soft);
+  align-content: start;
+  gap: var(--sp-4);
+  min-width: 0;
+  padding: var(--sp-5);
+  border: 1px solid transparent;
+  border-radius: var(--r-lg);
+  background: linear-gradient(var(--panel-1), var(--panel-1)) padding-box,
+    var(--spectrum-line) border-box;
 }
 
 .step__index {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xl);
-  font-weight: 500;
-  color: var(--text-dim);
+  font-family: var(--font-timer);
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  color: #69caff;
   line-height: 1;
-  padding-top: 4px;
 }
 
 .step__title {
@@ -80,18 +83,21 @@
   max-width: 62ch;
 }
 
-.step__body ul {
+.step ul {
   margin-top: var(--sp-3);
   display: grid;
   gap: var(--sp-2);
 }
 
-.step__body li {
+.step li {
   padding-left: var(--sp-4);
   position: relative;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
 }
 
-.step__body li::before {
+.step li::before {
   content: "";
   position: absolute;
   left: 0;
@@ -127,6 +133,46 @@
   line-height: 1.7;
 }
 
+.about-story {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+  gap: var(--sp-7);
+  align-items: start;
+}
+
+.about-story__signal {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-5);
+  border: 1px solid transparent;
+  border-radius: var(--r-lg);
+  background: linear-gradient(var(--panel-1), var(--panel-1)) padding-box,
+    var(--spectrum-line) border-box;
+}
+
+.about-story__signal strong {
+  margin-bottom: var(--sp-2);
+  font-size: var(--fs-lg);
+}
+
+.about-story__signal > span:not(.u-label) {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+@media (max-width: 1000px) {
+  .steps {
+    grid-template-columns: 1fr;
+  }
+
+  .step {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: var(--sp-4);
+  }
+}
+
 @media (max-width: 720px) {
   .page-head {
     padding-block: var(--sp-7) var(--sp-5);
@@ -141,13 +187,18 @@
   }
 
   .step {
-    grid-template-columns: 1fr;
-    gap: var(--sp-2);
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: var(--sp-3);
+    padding: var(--sp-4);
   }
 
   .step__index {
-    font-size: var(--fs-base);
-    padding-top: 0;
+    font-size: var(--fs-xl);
+  }
+
+  .about-story {
+    grid-template-columns: 1fr;
+    gap: var(--sp-5);
   }
 
   .def {

@@ -11,7 +11,7 @@ const bundle = await build({
   },
   bundle: true, write: false, format: "esm", platform: "node",
 });
-const { syncClock, syncRoomState, applyCommand, createRoomState, DEFAULT_ROOM_INPUT } = await import(
+const { syncClock, syncRoomState, applyCommand, canExecuteCommand, isMatchFinished, createRoomState, DEFAULT_ROOM_INPUT } = await import(
   `data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`
 );
 
@@ -197,4 +197,34 @@ test("saving config does not refill an exhausted balance", () => {
   const before = room({ isRunning: false, affirmativeRemainingMs: 0, totalRemainingMs: 0 });
   const value = applyCommand(before, { type: "update-config", config: before.config }, 20000, "host");
   assert.deepEqual(value.clock, before.clock);
+});
+
+test("round count is display-only, while exhausted matches freeze until host reset", () => {
+  const before = room({
+    affirmativeRemainingMs: 10000,
+    negativeRemainingMs: 10000,
+    totalRemainingMs: 100000,
+    activeSide: "negative",
+    isRunning: true,
+  });
+  before.config.maxRounds = 1;
+
+  const finished = applyCommand(before, { type: "end-turn" }, before.clock.updatedAt, "host");
+  assert.equal(finished.clock.currentRound, 2);
+  assert.equal(isMatchFinished(finished.clock, finished.config), false);
+  assert.equal(finished.clock.isRunning, true);
+  finished.clock.totalRemainingMs = 0;
+  const exhausted = syncRoomState(finished, finished.clock.updatedAt);
+  assert.equal(isMatchFinished(exhausted.clock, exhausted.config), true);
+  assert.equal(exhausted.clock.isRunning, false);
+  assert.equal(canExecuteCommand("host", exhausted, { type: "resume" }), false);
+  assert.equal(canExecuteCommand("affirmative", exhausted, { type: "end-turn" }), false);
+  assert.equal(canExecuteCommand("viewer", exhausted, { type: "reset" }), false);
+  assert.equal(canExecuteCommand("host", exhausted, { type: "reset" }), true);
+
+  const reset = applyCommand(exhausted, { type: "reset" }, 20000, "host");
+  assert.equal(isMatchFinished(reset.clock, reset.config), false);
+  assert.equal(reset.clock.currentRound, 1);
+  assert.equal(reset.clock.isRunning, false);
+  assert.equal(reset.roundHistory.length, 0);
 });

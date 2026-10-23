@@ -12,6 +12,7 @@ import {
   createRoomState,
   describeCommandEvents,
   getVoiceParticipant,
+  isMatchFinished,
   isVoiceParticipant,
   syncRoomState,
   toPublicRoomState,
@@ -33,6 +34,7 @@ import {
 import { RoomBootstrapPayload, WorkerEnv } from "./worker-types";
 
 const STORAGE_KEY = "room-state";
+const STATE_VERSION_KEY = "room-state-version";
 const IDLE_DELETE_AT_KEY = "idle-delete-at";
 const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 /** 超过这么久没再露过面就算离线（客户端每 1.5 秒轮询一次，所以 7 秒足够宽容） */
@@ -51,6 +53,7 @@ export class RoomDurableObject {
   private readonly env: WorkerEnv;
   private readonly encoder = new TextEncoder();
   private readonly sessions = new Map<string, LiveSession>();
+  private stateVersion = 0;
   /**
    * 最近活跃过的客户端（presenceId → { 时间, 角色 }）。
    * 在线人数以它为准，而不是以 SSE 会话数为准 —— 见 getOnlineCounts 的说明。
@@ -64,6 +67,7 @@ export class RoomDurableObject {
     this.env = env;
     void this.state.blockConcurrencyWhile(async () => {
       this.room = (await this.state.storage.get<RoomState>(STORAGE_KEY)) ?? null;
+      this.stateVersion = (await this.state.storage.get<number>(STATE_VERSION_KEY)) ?? (this.room ? 1 : 0);
     });
   }
 
@@ -83,6 +87,14 @@ export class RoomDurableObject {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    if (request.method === "GET" && url.pathname === "/admin/links") {
+      const adminError = await requireAdmin(request, this.env);
+      if (adminError) return adminError;
+      const room = await this.getRoom();
+      if (!room) return json({ error: "房间不存在" }, 404);
+      return json({ links: buildRoomLinks(url.origin, room.roomId, room.tokens) });
+    }
 
     if (url.pathname === "/admin/create" || url.pathname === "/admin/delete") {
       const adminError = await requireAdmin(request, this.env);
@@ -230,7 +242,12 @@ export class RoomDurableObject {
       return json({ error: "语音连接身份无效，请刷新页面重试" }, 403);
     }
 
-    if (!canExecuteCommand(payload.role, currentRoom, payload.command)) {
+    const now = Date.now();
+    const commandRoom = syncRoomState(currentRoom, now);
+    if (!canExecuteCommand(payload.role, commandRoom, payload.command)) {
+      if (isMatchFinished(commandRoom.clock, commandRoom.config)) {
+        return json({ error: "比赛已结束，无法继续修改" }, 409);
+      }
       return json({ error: "你没有执行该操作的权限" }, 403);
     }
 
@@ -242,8 +259,7 @@ export class RoomDurableObject {
     }
 
     const origin = new URL(request.url).origin;
-    const now = Date.now();
-    const room = applyCommand(currentRoom, payload.command, now, payload.role);
+    const room = applyCommand(commandRoom, payload.command, now, payload.role);
 
     /*
       比赛事件时间线在这里落库：把「这条命令到底造成了什么变化」翻译成事件，
@@ -443,6 +459,11 @@ export class RoomDurableObject {
     }
 
     this.room = (await this.state.storage.get<RoomState>(STORAGE_KEY)) ?? null;
+    if (this.stateVersion === 0) {
+      // Constructor usually restores both values together; retain a lazy fallback
+      // for runtimes that enter before blockConcurrencyWhile has initialized state.
+      this.stateVersion = (await this.state.storage.get<number>(STATE_VERSION_KEY)) ?? (this.room ? 1 : 0);
+    }
     return this.room;
   }
 
@@ -457,8 +478,11 @@ export class RoomDurableObject {
       role,
       permissions: getRolePermissions(role),
       links: role === "host" ? buildRoomLinks(origin, room.roomId, room.tokens) : undefined,
-      viewerLink: buildRoomLinks(origin, room.roomId, room.tokens).viewer,
+      // Keep the token server-issued, while the client uses its current origin
+      // to compose a safe share link for local and production environments.
+      viewerToken: room.tokens.viewer,
       serverNow: now,
+      stateVersion: this.stateVersion,
       onlineCount: this.getOnlineCount(),
       onlineByRole: this.getOnlineCounts(),
     };
@@ -480,11 +504,11 @@ export class RoomDurableObject {
       return;
     }
 
+    this.stateVersion += 1;
     await this.state.storage.put(STORAGE_KEY, this.room);
-    await this.env.ROOM_DIRECTORY.put(
-      `room:${this.room.roomId}`,
-      JSON.stringify(toRoomSummary(this.room, origin)),
-    );
+    await this.state.storage.put(STATE_VERSION_KEY, this.stateVersion);
+    const { links: _links, ...summary } = toRoomSummary(this.room, origin);
+    await this.env.ROOM_DIRECTORY.put(`room:${this.room.roomId}`, JSON.stringify(summary));
   }
 
   private async broadcastSnapshot(origin: string): Promise<void> {
@@ -517,6 +541,7 @@ export class RoomDurableObject {
     const payload = JSON.stringify({
       room: toPublicRoomState(room),
       serverNow: now,
+      stateVersion: this.stateVersion,
       onlineCount: this.getOnlineCount(),
       onlineByRole: this.getOnlineCounts(),
     });

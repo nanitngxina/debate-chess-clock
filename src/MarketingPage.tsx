@@ -66,7 +66,6 @@ function normalizeRoomHref(raw: string): string | null {
 }
 
 export function MarketingPage({ onNavigate, onJoinRoom }: MarketingPageProps) {
-  const [joinOpen, setJoinOpen] = useState(false);
   const [joinValue, setJoinValue] = useState("");
   const [joinError, setJoinError] = useState<string | null>(null);
 
@@ -130,31 +129,30 @@ export function MarketingPage({ onNavigate, onJoinRoom }: MarketingPageProps) {
                 <button
                   type="button"
                   className="btn btn--lg btn--ghost"
-                  aria-expanded={joinOpen}
-                  onClick={() => {
-                    setJoinOpen((value) => !value);
-                    setJoinError(null);
-                  }}
+                  onClick={() => document.getElementById("room-invite-link")?.focus()}
                 >
-                  进入房间
+                  我有邀请链接
                 </button>
               </div>
 
-              {joinOpen && (
-                <form className="hero__join" onSubmit={handleJoin}>
-                  <input
-                    className="input"
-                    type="text"
-                    value={joinValue}
-                    placeholder="粘贴主持人发给你的房间链接"
-                    aria-label="房间链接"
-                    onChange={(event) => setJoinValue(event.target.value)}
-                  />
-                  <button type="submit" className="btn">
-                    进入
-                  </button>
-                </form>
-              )}
+              <p className="hero__join-hint">观众和辩手无需注册，粘贴主持人发来的专属链接即可加入。</p>
+              <form className="hero__join" onSubmit={handleJoin}>
+                <input
+                  id="room-invite-link"
+                  className="input"
+                  type="text"
+                  value={joinValue}
+                  placeholder="粘贴比赛邀请链接"
+                  aria-label="比赛邀请链接"
+                  onChange={(event) => {
+                    setJoinValue(event.target.value);
+                    setJoinError(null);
+                  }}
+                />
+                <button type="submit" className="btn">
+                  加入比赛
+                </button>
+              </form>
 
               {joinError && <p className="feedback feedback--error">{joinError}</p>}
             </div>

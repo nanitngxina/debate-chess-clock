@@ -271,12 +271,8 @@ export function syncRoomState(room: RoomState, now: number): RoomState {
  * 注意：**不判断"谁赢了"** —— 当前业务逻辑里没有正式的胜负判定，
  * 所以界面只呈现事实（各自剩多少、打了几个回合），不编输赢。
  */
-export function isMatchFinished(clock: RoomClockState, config: RoomConfig): boolean {
+export function isMatchFinished(clock: RoomClockState, _config: RoomConfig): boolean {
   if (clock.totalRemainingMs <= 0) {
-    return true;
-  }
-
-  if (config.maxRounds > 0 && clock.currentRound > config.maxRounds) {
     return true;
   }
 
@@ -288,21 +284,31 @@ export function validateToken(room: RoomState, role: RoomRole, token: string): b
 }
 
 export function canExecuteCommand(role: RoomRole, room: RoomState, command: RoomCommand): boolean {
+  const isVoiceCommand =
+    command.type === "join-voice" ||
+    command.type === "leave-voice" ||
+    command.type === "set-voice-muted" ||
+    command.type === "request-public-voice";
+  if (isVoiceCommand) {
+    return isVoiceCommandAllowed(role, room, command);
+  }
+
+  // Reset is an explicit host-only recovery action, including after a match ends.
+  // Every other normal match command is frozen once the result is final.
+  if (role === "host" && command.type === "reset") {
+    return true;
+  }
+
+  if (isMatchFinished(room.clock, room.config)) {
+    return false;
+  }
+
   if (role === "host") {
     return true;
   }
 
   if ((role === "affirmative" || role === "negative") && command.type === "end-turn") {
     return room.clock.activeSide === role;
-  }
-
-  if (
-    command.type === "join-voice" ||
-    command.type === "leave-voice" ||
-    command.type === "set-voice-muted" ||
-    command.type === "request-public-voice"
-  ) {
-    return isVoiceCommandAllowed(role, room, command);
   }
 
   return false;
@@ -406,9 +412,10 @@ export function applyCommand(room: RoomState, command: RoomCommand, now: number,
         ].slice(0, MAX_ROUND_HISTORY),
         updatedAt: now,
       };
+      const finalizedRoom = syncRoomState(nextRoom, now);
       return {
-        ...nextRoom,
-        voice: syncVoiceStateWithClock(nextRoom.voice, nextRoom.clock),
+        ...finalizedRoom,
+        voice: syncVoiceStateWithClock(finalizedRoom.voice, finalizedRoom.clock),
       };
     }
     case "reset": {

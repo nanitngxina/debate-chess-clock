@@ -10,6 +10,7 @@ interface VerifyEmailBannerProps {
  * 通栏细条，不阻塞使用，只提醒并给出验证入口与重发入口。
  */
 export function VerifyEmailBanner({ session }: VerifyEmailBannerProps) {
+  const [expanded, setExpanded] = useState(false);
   const [code, setCode] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [devHint, setDevHint] = useState<string | null>(null);
@@ -58,39 +59,53 @@ export function VerifyEmailBanner({ session }: VerifyEmailBannerProps) {
   return (
     <div className="notice-bar">
       <div className="container notice-bar__inner">
-        <span className="notice-bar__text">
-          <span className="dot" />
-          邮箱未验证 —— 验证后才能在忘记密码时自助找回
-        </span>
-
-        {notice && <span className="muted">{notice}</span>}
-        {devHint && <span className="muted">{devHint}</span>}
-        {visibleError && <span className="feedback feedback--error">{visibleError}</span>}
-
-        <div className="notice-bar__actions">
-          <form className="notice-bar__code" onSubmit={handleVerify}>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={code}
-              placeholder="000000"
-              aria-label="邮箱验证码"
-              onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-            />
-            <button type="submit" className="btn btn--sm" disabled={session.saving}>
-              验证
-            </button>
-          </form>
+        <div className="notice-bar__summary">
+          <span className="notice-bar__text">
+            <span className="dot" />
+            邮箱未验证
+            <span className="notice-bar__detail">验证后可使用密码找回</span>
+          </span>
           <button
             type="button"
-            className="btn btn--ghost btn--sm"
-            disabled={session.saving}
-            onClick={handleResend}
+            className="btn btn--quiet btn--sm notice-bar__toggle"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((previous) => !previous)}
           >
-            重发验证码
+            {expanded ? "收起" : "立即验证"}
           </button>
         </div>
+
+        {expanded && (
+          <div className="notice-bar__details" id="verify-email-actions">
+            {notice && <span className="muted">{notice}</span>}
+            {devHint && <span className="muted">{devHint}</span>}
+            {visibleError && <span className="feedback feedback--error">{visibleError}</span>}
+            <div className="notice-bar__actions">
+              <form className="notice-bar__code" onSubmit={handleVerify}>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={code}
+                  placeholder="000000"
+                  aria-label="邮箱验证码"
+                  onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+                />
+                <button type="submit" className="btn btn--sm" disabled={session.saving}>
+                  验证
+                </button>
+              </form>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                disabled={session.saving}
+                onClick={handleResend}
+              >
+                重发验证码
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

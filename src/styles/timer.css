@@ -10,10 +10,13 @@
 
 .timer-lab {
   position: relative;
-  background: var(--panel-1);
-  border: 1px solid var(--border);
+  background: linear-gradient(var(--panel-1), var(--panel-1)) padding-box,
+    var(--spectrum-flow) border-box;
+  border: 2px solid transparent;
   border-radius: var(--r-lg);
   overflow: hidden;
+  box-shadow: 0 0 22px rgba(68, 177, 255, 0.12);
+  animation: spectrum-orbit 9s linear infinite;
 }
 
 /* ---------------------------------------------------------------------------
@@ -33,7 +36,7 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background-image: url("/hero-arena.jpg");
+  background-image: url("/hero-arena-v2.jpg");
   background-size: cover;
   background-position: center 42%;
   opacity: 0.5;
@@ -155,6 +158,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: stretch;
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-5);
 }
 
 .timer-board__vs {
@@ -177,6 +182,9 @@
   gap: var(--sp-3);
   padding: var(--sp-5) var(--sp-5) var(--sp-4);
   min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: #0c1016;
   /* 让内部能用 cqw 按"本列宽度"给数字定字号，从而保证永远放得下 */
   container-type: inline-size;
 }
@@ -280,9 +288,9 @@
 
 /* 主读数 */
 .side__digits {
-  font-family: var(--font-mono);
+  font-family: var(--font-timer);
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1, "zero" 1;
+  font-feature-settings: "tnum" 1;
   /* 兜底：不支持容器查询的浏览器用这一行 */
   font-size: 3.25rem;
   /*
@@ -291,10 +299,10 @@
    * 所以 16cqw 只占列宽的 ~77%，任何宽度下都不会溢出、更不会和另一侧挤在一起。
    */
   font-size: clamp(2rem, 16cqw, 5.25rem);
-  font-weight: 500;
+  font-weight: 600;
   line-height: 0.94;
   letter-spacing: -0.02em;
-  color: var(--text-dim);
+  color: var(--text-muted);
   transition: color var(--dur) var(--ease);
 }
 
@@ -305,10 +313,10 @@
 
 /*
   非当前发言方统一降亮 —— 这是"现在轮到谁"最主要的表达。
-  压到 0.5 但仍然可读：既要一眼看出焦点，也不能让人读不出数字。
+  保留足够亮度，让暂停时双方余额仍可直接读出。
 */
 .side:not(.side--active):not(.side--urgent):not(.side--critical) .side__digits {
-  opacity: 0.5;
+  opacity: 0.78;
 }
 
 .side:not(.side--active) .side__bar-fill {
@@ -316,7 +324,11 @@
 }
 
 .side--active {
-  box-shadow: inset 0 2px 0 0 var(--side);
+  border-color: transparent;
+  background: linear-gradient(#0c1016, #0c1016) padding-box,
+    var(--spectrum-flow) border-box;
+  box-shadow: 0 0 18px var(--side-glow);
+  animation: spectrum-orbit 9s linear infinite;
 }
 
 .side--active::before {
@@ -434,7 +446,7 @@
 }
 
 .timer-stage__total-value {
-  font-family: var(--font-mono);
+  font-family: var(--font-timer);
   font-variant-numeric: tabular-nums;
   font-size: var(--fs-xl);
   font-weight: 600;
@@ -478,10 +490,10 @@
 }
 
 .timer-lab__foot-value {
-  font-family: var(--font-mono);
+  font-family: var(--font-timer);
   font-variant-numeric: tabular-nums;
   font-size: var(--fs-lg);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -522,6 +534,7 @@
   /* 手机上下排列：VS 变成一条横向分隔线 */
   .timer-board {
     grid-template-columns: minmax(0, 1fr);
+    padding: var(--sp-3) var(--sp-4);
   }
 
   .timer-board__vs {

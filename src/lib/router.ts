@@ -31,5 +31,5 @@ export function parseRoute(pathname: string): AppRoute {
 
 /** 需要登录才能进入的页面 */
 export function routeRequiresAccount(route: AppRoute): boolean {
-  return route.name === "dashboard" || route.name === "room";
+  return route.name === "dashboard";
 }

@@ -6,6 +6,32 @@
    第一视觉焦点永远是「时间」。
    =========================================================================== */
 
+@font-face {
+  font-family: "Barlow Condensed";
+  src: url("/fonts/barlow-condensed-latin-600-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Barlow Condensed";
+  src: url("/fonts/barlow-condensed-latin-700-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@property --spectrum-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes spectrum-orbit {
+  to { --spectrum-angle: 360deg; }
+}
+
 :root {
   color-scheme: dark;
 
@@ -20,6 +46,8 @@
   --border: #292b2f;
   --border-soft: #1e2023;
   --border-strong: #3a3d43;
+  --spectrum-line: linear-gradient(125deg, #37a9ff 0%, #35e5cf 48%, #a56bff 100%);
+  --spectrum-flow: conic-gradient(from var(--spectrum-angle), #37a9ff, #35e5cf, #f2cf72, #f379be, #a56bff, #37a9ff);
 
   /* --- 文字 ------------------------------------------------------------ */
   --text: #f5f5f5;
@@ -58,6 +86,10 @@
   --font-mono:
     "JetBrains Mono", "SF Mono", "Cascadia Mono", "Roboto Mono", "DejaVu Sans Mono", "Consolas",
     ui-monospace, monospace;
+  /* 赛事计时牌风格，只用于大号读数；数字仍使用等宽排版。 */
+  --font-timer:
+    "Barlow Condensed", "Bahnschrift SemiCondensed", "Bahnschrift", "DIN Alternate", "Arial Narrow",
+    "Segoe UI", sans-serif;
 
   /* --- 字号 ------------------------------------------------------------ */
   --fs-micro: 0.6875rem; /* 11px 全大写小标签 */

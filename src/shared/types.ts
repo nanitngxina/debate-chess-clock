@@ -185,9 +185,10 @@ export interface RoomAccessPayload {
   role: RoomRole;
   permissions: RolePermissions;
   links?: RoomLinkBundle;
-  /** 所有已授权角色可分享的观众链接；首个 SSE 快照到达时可能尚未取得。 */
-  viewerLink?: string;
+  /** 服务端发放的观众令牌；链接使用当前浏览器 origin 生成。 */
+  viewerToken: string;
   serverNow: number;
+  stateVersion: number;
   onlineCount: number;
   onlineByRole: OnlineByRole;
 }
@@ -195,6 +196,7 @@ export interface RoomAccessPayload {
 export interface RoomSnapshotPayload {
   room: PublicRoomState;
   serverNow: number;
+  stateVersion: number;
   onlineCount: number;
   onlineByRole: OnlineByRole;
 }

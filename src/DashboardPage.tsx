@@ -1,15 +1,21 @@
 import { FormEvent, useEffect, useState } from "react";
-import { createRoom, deleteRoom, listRooms, loginAdmin } from "./lib/api";
+import { ApiError, createRoom, deleteRoom, listRooms, loginAdmin } from "./lib/api";
 import { describeRoomStatus, formatDateTime } from "./lib/format";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { DEFAULT_ROOM_INPUT } from "./shared/defaults";
 import { cloneConfig, minutesToSeconds, secondsToMinutes } from "./shared/engine";
+import { buildRoomLinks } from "./shared/engine";
 import { CreateRoomInput, RoomSummary } from "./shared/types";
 import { BrandMark } from "./ui/BrandMark";
 import { LinkStack } from "./ui/LinkStack";
 import { RulesEditor } from "./ui/RulesEditor";
 
 const ADMIN_TOKEN_KEY = "debate-admin-token";
+const ADMIN_SESSION_EXPIRED = "后台登录已过期，请重新输入后台口令。已填写的比赛信息会保留。";
+
+function isExpiredAdminSession(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
 
 function createDraft(): CreateRoomInput {
   return {
@@ -49,7 +55,26 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
   const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [latestRoom, setLatestRoom] = useState<RoomSummary | null>(null);
+  const [roomSearch, setRoomSearch] = useState("");
+  const [showAllRooms, setShowAllRooms] = useState(false);
   const hasSession = adminToken.trim().length > 0;
+  const searchTerm = roomSearch.trim().toLocaleLowerCase();
+  const filteredRooms = searchTerm
+    ? rooms.filter((room) =>
+        [room.topic, room.roomId, room.sides.affirmativeName, room.sides.negativeName]
+          .some((value) => value.toLocaleLowerCase().includes(searchTerm)),
+      )
+    : rooms;
+  const visibleRooms = searchTerm || showAllRooms ? filteredRooms : filteredRooms.slice(0, 6);
+  const resolveRoomLinks = (room: RoomSummary) => {
+    const tokens = Object.fromEntries(
+      (["viewer", "affirmative", "negative", "host"] as const).map((role) => [
+        role,
+        new URL(room.links[role]).searchParams.get("token") ?? "",
+      ]),
+    ) as { viewer: string; affirmative: string; negative: string; host: string };
+    return buildRoomLinks(window.location.origin, room.roomId, tokens);
+  };
 
   useEffect(() => {
     if (!hasSession) {
@@ -66,11 +91,16 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
       try {
         const response = await listRooms(adminToken);
         if (!cancelled) {
-          setRooms(response.rooms);
+          setRooms(response.rooms.map((room) => ({ ...room, links: resolveRoomLinks(room) })));
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "房间列表加载失败");
+          if (isExpiredAdminSession(loadError)) {
+            setAdminToken("");
+            setError(ADMIN_SESSION_EXPIRED);
+          } else {
+            setError(loadError instanceof Error ? loadError.message : "房间列表加载失败");
+          }
         }
       } finally {
         if (!cancelled) {
@@ -92,9 +122,14 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
 
     try {
       const response = await listRooms(adminToken);
-      setRooms(response.rooms);
+      setRooms(response.rooms.map((room) => ({ ...room, links: resolveRoomLinks(room) })));
     } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : "房间刷新失败");
+      if (isExpiredAdminSession(refreshError)) {
+        setAdminToken("");
+        setError(ADMIN_SESSION_EXPIRED);
+      } else {
+        setError(refreshError instanceof Error ? refreshError.message : "房间刷新失败");
+      }
     } finally {
       setBusy(null);
     }
@@ -123,11 +158,17 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
 
     try {
       const response = await createRoom(adminToken, draft);
-      setLatestRoom(response.room);
-      setRooms((previousRooms) => [response.room, ...previousRooms]);
+      const room = { ...response.room, links: resolveRoomLinks(response.room) };
+      setLatestRoom(room);
+      setRooms((previousRooms) => [room, ...previousRooms]);
       setDraft(createDraft());
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "创建房间失败");
+      if (isExpiredAdminSession(createError)) {
+        setAdminToken("");
+        setError(ADMIN_SESSION_EXPIRED);
+      } else {
+        setError(createError instanceof Error ? createError.message : "创建房间失败");
+      }
     } finally {
       setBusy(null);
     }
@@ -146,7 +187,12 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
       setRooms((previousRooms) => previousRooms.filter((item) => item.roomId !== room.roomId));
       setLatestRoom((previousRoom) => (previousRoom?.roomId === room.roomId ? null : previousRoom));
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "删除房间失败");
+      if (isExpiredAdminSession(deleteError)) {
+        setAdminToken("");
+        setError(ADMIN_SESSION_EXPIRED);
+      } else {
+        setError(deleteError instanceof Error ? deleteError.message : "删除房间失败");
+      }
     } finally {
       setDeletingRoomId(null);
     }
@@ -175,7 +221,7 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
           <div className="gate__brand">
             <BrandMark size={40} />
             <h1 className="gate__title">主持人控制台</h1>
-            <p className="gate__note">输入后台口令后，可以创建房间并分发四类链接。</p>
+            <p className="gate__note">你已登录账号。再输入管理员提供的后台口令，即可创建比赛并分发邀请链接。</p>
           </div>
 
           <form className="auth-card" onSubmit={handleLogin}>
@@ -370,7 +416,19 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
             </div>
             <div className="surface__body">
               {latestRoom ? (
-                <LinkStack links={latestRoom.links} />
+                <>
+                  <div className="feedback feedback--success">
+                    比赛房间已创建。下一步：打开主持人页面，邀请双方辩手和观众，准备好后开始计时。
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn--primary btn--block"
+                    onClick={() => onOpenRoom(latestRoom.links.host)}
+                  >
+                    进入主持人页面
+                  </button>
+                  <LinkStack links={latestRoom.links} />
+                </>
               ) : (
                 <p className="empty">创建房间后，主持人、正方、反方、观众四类链接会显示在这里。</p>
               )}
@@ -394,8 +452,28 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
               {rooms.length === 0 ? (
                 <p className="empty">还没有房间，先创建第一场比赛。</p>
               ) : (
-                <ul className="room-list">
-                  {rooms.map((room) => (
+                <>
+                  <div className="room-list__tools">
+                    <input
+                      className="input"
+                      type="search"
+                      value={roomSearch}
+                      placeholder="搜索辩题、队伍或房间 ID"
+                      aria-label="搜索已开房间"
+                      onChange={(event) => setRoomSearch(event.target.value)}
+                    />
+                    <span className="room-list__count">
+                      {searchTerm
+                        ? `找到 ${filteredRooms.length} 场`
+                        : showAllRooms
+                          ? `全部 ${rooms.length} 场`
+                          : `最近 ${Math.min(rooms.length, 6)} 场`}
+                    </span>
+                  </div>
+                  {filteredRooms.length === 0 ? (
+                    <p className="empty">没有找到匹配的房间。</p>
+                  ) : <ul className="room-list">
+                  {visibleRooms.map((room) => (
                     <li className="room-item" key={room.roomId}>
                       <div className="room-item__head">
                         <span className="room-item__topic">{room.topic}</span>
@@ -449,7 +527,18 @@ export function DashboardPage({ onOpenRoom }: DashboardPageProps) {
                       </div>
                     </li>
                   ))}
-                </ul>
+                  </ul>}
+                  {!searchTerm && rooms.length > 6 && (
+                    <button
+                      type="button"
+                      className="room-list__more"
+                      aria-expanded={showAllRooms}
+                      onClick={() => setShowAllRooms((previous) => !previous)}
+                    >
+                      {showAllRooms ? "收起房间列表 ↑" : `查看全部 ${rooms.length} 场比赛 ↓`}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </section>

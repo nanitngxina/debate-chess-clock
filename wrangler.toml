@@ -19,6 +19,12 @@ routes = [
   { pattern = "www.bajialong.com", custom_domain = true }
 ]
 
+# 邮件发信（2026-10-22 接入 Resend，域名 bajialong.com 已验证 DKIM/SPF）
+# 密钥不进仓库：`npx wrangler secret put RESEND_API_KEY`
+[vars]
+EMAIL_PROVIDER = "resend"
+EMAIL_FROM = "八角笼辩论棋钟 <no-reply@bajialong.com>"
+
 # 前端静态资源（先 npm run build 生成 dist/，再 deploy）
 [assets]
 directory = "./dist"
