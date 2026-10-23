@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="八角笼 DEBATE ARENA">
+  <defs>
+    <linearGradient id="spectrum" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#37a9ff" />
+      <stop offset="0.48" stop-color="#35e5cf" />
+      <stop offset="1" stop-color="#a56bff" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0a0a0b" />
+  <polygon
+    points="50.48,39.65 39.65,50.48 24.35,50.48 13.52,39.65 13.52,24.35 24.35,13.52 39.65,13.52 50.48,24.35"
+    fill="none"
+    stroke="url(#spectrum)"
+    stroke-width="4"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M32 32 V21 M32 32 L41 37"
+    fill="none"
+    stroke="#f5f5f5"
+    stroke-width="3.5"
+    stroke-linecap="round"
+  />
+</svg>

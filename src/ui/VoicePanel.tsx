@@ -81,13 +81,16 @@ function VoiceMember({ participant }: { participant: VoiceParticipant }) {
   );
 }
 
-function getVoiceTitle(_role: RoomRole, _currentChannel: VoiceChannel): string {
+function getVoiceTitle(_role: RoomRole, currentChannel: VoiceChannel): string {
   /*
-   * 统一叫「公共语音」——观众页原来显示的是「观众语音频道」。
-   * 注意：这里只改文案，频道的实际逻辑一律没动（观众进哪个频道、
-   * 要不要审批，都还是原来的行为）。
+   * 标题必须跟着「实际所在频道」走，不能一律叫公共语音。
+   *
+   * 观众点这个按钮进的是 audience 频道（getVoiceChannelForRole），
+   * 跟主持人、辩手的 public 频道是两间房：按钮写「加入公共语音」时，
+   * 观众点进去却听不到主持人 —— 名字和实际行为对不上，看起来像 bug。
+   * 想进 public 频道要走「申请加入公共频道」并等主持人批准。
    */
-  return "公共语音";
+  return currentChannel === "audience" ? "观众语音" : "公共语音";
 }
 
 function getJoinLabel(title: string, isJoined: boolean): string {
